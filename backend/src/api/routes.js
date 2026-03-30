@@ -189,7 +189,7 @@ router.post('/sync/:providerId', verifyToken, requireAdmin, async (req, res) => 
         await provider.save();
 
         // Execute sync
-        await connector.sync(providerId);
+        await connector.syncAll(provider);
 
         // Update provider on success
         provider.lastSync = new Date();

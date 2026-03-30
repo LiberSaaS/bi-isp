@@ -1,5 +1,15 @@
+import mongoose from 'mongoose';
 import { Customer, Invoice, ServiceOrder, Provider } from '../models/index.js';
 import logger from '../utils/logger.js';
+
+/**
+ * Convert string ID to mongoose ObjectId for use in aggregate pipelines.
+ * Mongoose .find() auto-casts strings to ObjectId, but .aggregate() does not.
+ */
+function toObjectId(id) {
+  if (id instanceof mongoose.Types.ObjectId) return id;
+  return new mongoose.Types.ObjectId(id);
+}
 
 /**
  * Analytics Engine for ISP BI
@@ -14,11 +24,12 @@ class AnalyticsEngine {
    */
   async getMetrics(providerId, period = 30) {
     try {
+      const oid = toObjectId(providerId);
       const now = new Date();
       const startDate = new Date(now.getTime() - period * 24 * 60 * 60 * 1000);
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-      // Fetch all data in parallel
+      // Fetch all data in parallel (use ObjectId for aggregate pipelines)
       const [
         activeCustomers,
         churnData,
@@ -31,16 +42,16 @@ class AnalyticsEngine {
         planDistribution,
         defaultVsRevenue
       ] = await Promise.all([
-        this._getActiveCustomersCount(providerId),
-        this._getChurnRate(providerId, startDate, period),
-        this._getDefaultRate(providerId, startDate, period),
-        this._getOpenServiceOrders(providerId),
-        this._getActivationsThisMonth(providerId, monthStart),
-        this._getMRR(providerId),
-        this._getMonthlyRevenue(providerId, period),
-        this._getCustomerEvolution(providerId, period),
-        this._getPlanDistribution(providerId),
-        this._getDefaultVsRevenue(providerId, period)
+        this._getActiveCustomersCount(oid),
+        this._getChurnRate(oid, startDate, period),
+        this._getDefaultRate(oid, startDate, period),
+        this._getOpenServiceOrders(oid),
+        this._getActivationsThisMonth(oid, monthStart),
+        this._getMRR(oid),
+        this._getMonthlyRevenue(oid, period),
+        this._getCustomerEvolution(oid, period),
+        this._getPlanDistribution(oid),
+        this._getDefaultVsRevenue(oid, period)
       ]);
 
       const mrr = mrrData.mrr || 0;
@@ -489,15 +500,16 @@ class AnalyticsEngine {
    */
   async getHealthMetrics(providerId) {
     try {
-      const provider = await Provider.findById(providerId);
+      const oid = toObjectId(providerId);
+      const provider = await Provider.findById(oid);
       if (!provider) {
         throw new Error('Provider not found');
       }
 
       const [customers, invoices, serviceOrders] = await Promise.all([
-        Customer.countDocuments({ providerId }),
-        Invoice.countDocuments({ providerId }),
-        ServiceOrder.countDocuments({ providerId })
+        Customer.countDocuments({ providerId: oid }),
+        Invoice.countDocuments({ providerId: oid }),
+        ServiceOrder.countDocuments({ providerId: oid })
       ]);
 
       const syncAgeMinutes = provider.syncAgeMinutes;

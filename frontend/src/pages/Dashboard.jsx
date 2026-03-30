@@ -92,6 +92,9 @@ export const Dashboard = () => {
     handleLogout()
   }
 
+  // API returns: { providerId, providerName, metrics: { activeCustomers, churnRate, ... } }
+  const m = metrics?.metrics || metrics || {}
+
   // Chart data from API metrics
   const clientEvolutionData = (m.customerEvolution || []).map(item => ({
     month: item.date ? new Date(item.date).toLocaleDateString('pt-BR', { month: 'short' }) : '',
@@ -111,9 +114,6 @@ export const Dashboard = () => {
   }))
 
   const COLORS = ['#10b981', '#f59e0b', '#ef4444', '#3b82f6', '#8b5cf6']
-
-  // API returns: { providerId, providerName, metrics: { activeCustomers, churnRate, ... } }
-  const m = metrics?.metrics || metrics || {}
 
   const kpiCards = [
     {
@@ -311,7 +311,9 @@ export const Dashboard = () => {
                       labelStyle={{ color: '#f1f5f9' }}
                     />
                     <Legend />
-                    <Bar dataKey="valor" fill="#2563eb" />
+                    <Bar dataKey="faturado" fill="#2563eb" name="Faturado" />
+                    <Bar dataKey="inadimplente" fill="#ef4444" name="Inadimplente" />
+                    <Bar dataKey="pago" fill="#10b981" name="Pago" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

@@ -71,18 +71,25 @@ async function makeRequest(client, endpoint, params = {}, retries = 0) {
 
 /**
  * Extract array from HubSoft response.
- * HubSoft may return: { clientes: [...] }, { data: [...] }, [...], { faturas: [...] }, etc.
+ * HubSoft may return: { status, msg, clientes: [...] }, { data: [...] }, [...], etc.
+ * If the response contains status:"error", log the error and return [].
  */
 function extractRecords(response) {
   if (!response) return [];
+  // HubSoft error responses come back as HTTP 200 with status:"error"
+  if (response.status === 'error') {
+    logger.warn('HubSoft API returned error', { msg: response.msg });
+    return [];
+  }
   if (Array.isArray(response)) return response;
-  if (Array.isArray(response.data)) return response.data;
   if (Array.isArray(response.clientes)) return response.clientes;
   if (Array.isArray(response.faturas)) return response.faturas;
   if (Array.isArray(response.atendimentos)) return response.atendimentos;
   if (Array.isArray(response.ordens)) return response.ordens;
-  // Try first array-valued key
+  if (Array.isArray(response.data)) return response.data;
+  // Try first array-valued key (skip status/msg)
   for (const key of Object.keys(response)) {
+    if (key === 'status' || key === 'msg') continue;
     if (Array.isArray(response[key])) return response[key];
   }
   return [];
@@ -97,8 +104,9 @@ async function fetchAllPages(client, endpoint, searchField = null) {
 
   if (searchField) {
     // HubSoft integration endpoints require busca + termo_busca
-    // Iterate through alphabet to get all records
-    const letters = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
+    // Iterate through alphabet + digits to get all records
+    // Note: HubSoft uses Portuguese param names with diacritics: página, itens_por_página
+    const letters = 'abcdefghijklmnopqrstuvwxyz123456789'.split('');
     const seenIds = new Set();
 
     for (const letter of letters) {
@@ -110,8 +118,8 @@ async function fetchAllPages(client, endpoint, searchField = null) {
           const params = {
             busca: searchField,
             termo_busca: letter,
-            pagina: page,
-            registros_por_pagina: HUBSOFT_SYNC_CONFIG.pageSize
+            'página': page,
+            'itens_por_página': HUBSOFT_SYNC_CONFIG.pageSize
           };
 
           const response = await makeRequest(client, endpoint, params);
@@ -140,12 +148,12 @@ async function fetchAllPages(client, endpoint, searchField = null) {
       }
     }
   } else {
-    // Standard paginated fetch
+    // Standard paginated fetch (no search field — use Portuguese pagination params)
     let page = 1;
     let hasMore = true;
 
     while (hasMore) {
-      const params = { pagina: page, registros_por_pagina: HUBSOFT_SYNC_CONFIG.pageSize };
+      const params = { 'página': page, 'itens_por_página': HUBSOFT_SYNC_CONFIG.pageSize };
       const response = await makeRequest(client, endpoint, params);
       const records = extractRecords(response);
 
@@ -272,13 +280,12 @@ async function syncInvoices(provider, client) {
   
   try {
     const invoices = await fetchAllPages(client, '/api/v1/integracao/cliente/financeiro');
-    
+
     // Get customers for ID lookup
     const customers = await Customer.find({ providerId: provider._id }).lean();
     const customerMap = new Map(customers.map(c => [c.externalId, c._id]));
 
-    const records = extractRecords(invoices);
-    const operations = records
+    const operations = invoices
       .filter(invoice => (invoice.id_fatura || invoice.id) && (invoice.id_cliente || invoice.cliente_id))
       .map(invoice => {
         const extId = (invoice.id_fatura || invoice.id)?.toString();
@@ -483,7 +490,7 @@ async function validate(provider) {
     );
     
     const client = createHubSoftClient(provider.config.url, token);
-    await makeRequest(client, '/api/v1/integracao/cliente', { busca: 'nome_razaosocial', termo_busca: 'a', registros_por_pagina: 1 });
+    await makeRequest(client, '/api/v1/integracao/cliente', { busca: 'nome_razaosocial', termo_busca: 'a', 'itens_por_página': 1, 'página': 1 });
     
     return {
       ok: true,
