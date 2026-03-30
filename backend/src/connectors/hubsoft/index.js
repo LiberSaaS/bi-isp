@@ -96,63 +96,87 @@ function extractRecords(response) {
 }
 
 /**
- * Fetch all paginated data from HubSoft integration API.
- * Uses alphabetic iteration on busca/termo_busca to get all records.
+ * Fetch all data from HubSoft integration API using recursive trie search.
+ *
+ * HubSoft's /integracao/cliente endpoint has two key limitations:
+ *   1. It always returns a MAXIMUM of 5 records per request (ignoring itens_por_página).
+ *   2. Pagination (página param) is broken — every page returns the same 5 records.
+ *
+ * To work around this we use a trie-based deepening strategy:
+ *   - Search with a prefix (e.g. "a"). If the API returns the max (5 records),
+ *     there are likely more records matching that prefix than we can see.
+ *   - Drill deeper by appending each character (e.g. "aa", "ab", ..., "az", "a ").
+ *   - Repeat until every prefix returns fewer than MAX_PER_REQUEST results.
+ *   - Deduplicate across all branches using a global Set of IDs.
+ *
+ * This guarantees we discover every record whose name contains at least one
+ * searchable substring, even though the API never returns more than 5 at a time.
  */
+const HUBSOFT_MAX_PER_REQUEST = 5;
+const HUBSOFT_MAX_SEARCH_DEPTH = 5;
+const SEARCH_CHARS = 'abcdefghijklmnopqrstuvwxyz '.split('');
+
 async function fetchAllPages(client, endpoint, searchField = null) {
-  let allData = [];
+  const allData = [];
 
   if (searchField) {
-    // HubSoft integration endpoints require busca + termo_busca
-    // Iterate through alphabet + digits to get all records
-    // Note: HubSoft uses Portuguese param names with diacritics: página, itens_por_página
-    const letters = 'abcdefghijklmnopqrstuvwxyz123456789'.split('');
     const seenIds = new Set();
+    let apiCalls = 0;
 
-    for (const letter of letters) {
-      let page = 1;
-      let hasMore = true;
+    /**
+     * Recursive search: fetch records for `prefix`, and if the API returns
+     * the maximum number of results, drill one level deeper.
+     */
+    async function deepSearch(prefix, depth) {
+      if (depth > HUBSOFT_MAX_SEARCH_DEPTH) return;
 
-      while (hasMore) {
-        try {
-          const params = {
-            busca: searchField,
-            termo_busca: letter,
-            'página': page,
-            'itens_por_página': HUBSOFT_SYNC_CONFIG.pageSize
-          };
+      try {
+        apiCalls++;
+        const params = {
+          busca: searchField,
+          termo_busca: prefix,
+          'página': 1,
+          'itens_por_página': 100   // requested but ignored by HubSoft
+        };
 
-          const response = await makeRequest(client, endpoint, params);
-          const records = extractRecords(response);
+        const response = await makeRequest(client, endpoint, params);
+        const records = extractRecords(response);
 
-          if (records.length === 0) {
-            hasMore = false;
-            break;
+        if (records.length === 0) return;
+
+        // Collect unique records
+        for (const record of records) {
+          const id = record.id || record.id_cliente || record.codigo;
+          if (id && !seenIds.has(String(id))) {
+            seenIds.add(String(id));
+            allData.push(record);
           }
-
-          // Deduplicate by ID
-          let newInPage = 0;
-          for (const record of records) {
-            const id = record.id || record.id_cliente || record.codigo;
-            if (id && !seenIds.has(String(id))) {
-              seenIds.add(String(id));
-              allData.push(record);
-              newInPage++;
-            }
-          }
-
-          // HubSoft ignores itens_por_página and returns a fixed page size (usually 5).
-          // Keep paginating until we get 0 records or 0 new unique records in a page.
-          hasMore = records.length > 0 && newInPage > 0;
-          page++;
-        } catch (error) {
-          logger.warn(`HubSoft fetch failed for letter '${letter}' page ${page}`, { endpoint, error: error.message });
-          hasMore = false;
         }
+
+        // If we hit the per-request cap, there may be more — drill deeper
+        if (records.length >= HUBSOFT_MAX_PER_REQUEST && depth < HUBSOFT_MAX_SEARCH_DEPTH) {
+          for (const ch of SEARCH_CHARS) {
+            await deepSearch(prefix + ch, depth + 1);
+          }
+        }
+      } catch (error) {
+        logger.warn(`HubSoft deep search failed for prefix "${prefix}"`, {
+          endpoint, error: error.message
+        });
       }
     }
+
+    // Start with each letter of the alphabet (skip space as first char)
+    const firstChars = 'abcdefghijklmnopqrstuvwxyz'.split('');
+    for (const ch of firstChars) {
+      await deepSearch(ch, 1);
+    }
+
+    logger.info(`HubSoft trie search completed`, {
+      endpoint, totalRecords: allData.length, apiCalls
+    });
   } else {
-    // Standard paginated fetch (no search field — use Portuguese pagination params)
+    // Standard paginated fetch (no search field)
     let page = 1;
     let hasMore = true;
 
@@ -166,8 +190,7 @@ async function fetchAllPages(client, endpoint, searchField = null) {
         break;
       }
 
-      allData = allData.concat(records);
-      // HubSoft may ignore page size param; keep going until empty page
+      allData.push(...records);
       hasMore = records.length > 0;
       page++;
     }
