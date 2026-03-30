@@ -131,15 +131,19 @@ async function fetchAllPages(client, endpoint, searchField = null) {
           }
 
           // Deduplicate by ID
+          let newInPage = 0;
           for (const record of records) {
             const id = record.id || record.id_cliente || record.codigo;
             if (id && !seenIds.has(String(id))) {
               seenIds.add(String(id));
               allData.push(record);
+              newInPage++;
             }
           }
 
-          hasMore = records.length >= HUBSOFT_SYNC_CONFIG.pageSize;
+          // HubSoft ignores itens_por_página and returns a fixed page size (usually 5).
+          // Keep paginating until we get 0 records or 0 new unique records in a page.
+          hasMore = records.length > 0 && newInPage > 0;
           page++;
         } catch (error) {
           logger.warn(`HubSoft fetch failed for letter '${letter}' page ${page}`, { endpoint, error: error.message });
@@ -163,7 +167,8 @@ async function fetchAllPages(client, endpoint, searchField = null) {
       }
 
       allData = allData.concat(records);
-      hasMore = records.length >= HUBSOFT_SYNC_CONFIG.pageSize;
+      // HubSoft may ignore page size param; keep going until empty page
+      hasMore = records.length > 0;
       page++;
     }
   }
