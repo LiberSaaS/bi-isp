@@ -105,7 +105,7 @@ app.use(checkLicense);
 app.use('/api', apiRoutes);
 
 // Static file serving for frontend
-const frontendPath = path.join(__dirname, '../../frontend-dist');
+const frontendPath = path.join(__dirname, '../frontend-dist');
 if (fs.existsSync(frontendPath)) {
   app.use(express.static(frontendPath));
 
