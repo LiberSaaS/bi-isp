@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (production only)
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 # Copy source and scripts
 COPY src/ ./src/
@@ -31,8 +31,6 @@ RUN mkdir -p /app/logs /app/frontend-dist
 
 # Copy frontend distribution (built outside Docker)
 COPY frontend-dist/ ./frontend-dist/
-
-# Expose API port
 
 # Expose API port
 EXPOSE 3001
