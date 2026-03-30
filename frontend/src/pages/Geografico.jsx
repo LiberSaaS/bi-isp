@@ -283,9 +283,10 @@ export const Geografico = () => {
     const fetchProviders = async () => {
       try {
         const response = await apiService.getProviders();
-        setProviders(response || []);
-        if (response && response.length > 0) {
-          setSelectedProvider(response[0].id);
+        const list = response.data.providers || [];
+        setProviders(list);
+        if (list && list.length > 0) {
+          setSelectedProvider(list[0].id);
         }
       } catch (err) {
         console.error('Error fetching providers:', err);
@@ -306,8 +307,8 @@ export const Geografico = () => {
       setLoading(true);
       setError(null);
       try {
-        const data = await apiService.getGeographicMetrics(selectedProvider);
-        setMetrics(data);
+        const response = await apiService.getGeographicMetrics(selectedProvider);
+        setMetrics(response.data.metrics);
       } catch (err) {
         console.error('Error fetching geographic metrics:', err);
         setError('Erro ao carregar métricas geográficas');
@@ -322,8 +323,8 @@ export const Geografico = () => {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const data = await apiService.getGeographicMetrics(selectedProvider);
-      setMetrics(data);
+      const response = await apiService.getGeographicMetrics(selectedProvider);
+      setMetrics(response.data.metrics);
     } catch (err) {
       console.error('Error syncing:', err);
       setError('Erro ao sincronizar dados');
@@ -358,11 +359,11 @@ export const Geografico = () => {
     );
   }
 
-  const byCity = metrics?.metrics?.byCity || [];
-  const byNeighborhood = metrics?.metrics?.byNeighborhood || [];
-  const activationsByCity = metrics?.metrics?.activationsByCity || [];
-  const statusByCity = metrics?.metrics?.statusByCity || [];
-  const revenueByCity = metrics?.metrics?.revenueByCity || [];
+  const byCity = metrics?.byCity || [];
+  const byNeighborhood = metrics?.byNeighborhood || [];
+  const activationsByCity = metrics?.activationsByCity || [];
+  const statusByCity = metrics?.statusByCity || [];
+  const revenueByCity = metrics?.revenueByCity || [];
 
   // Calculate KPI values
   const totalCidades = byCity.length;

@@ -32,7 +32,7 @@ const T = {
 
 const Alertas = () => {
   const { user } = useAuth()
-  const providerId = user?.provider_id
+  const [providerId, setProviderId] = useState(null)
 
   const [overviewMetrics, setOverviewMetrics] = useState(null)
   const [churnMetrics, setChurnMetrics] = useState(null)
@@ -41,6 +41,13 @@ const Alertas = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [generatedAt] = useState(new Date())
+
+  useEffect(() => {
+    apiService.getProviders().then(res => {
+      const list = res.data.providers || []
+      if (list.length > 0) setProviderId(list[0]._id)
+    }).catch(err => setError('Erro ao carregar provedores'))
+  }, [])
 
   useEffect(() => {
     if (!providerId) return
@@ -57,10 +64,10 @@ const Alertas = () => {
           apiService.getGeographicMetrics(providerId),
         ])
 
-        setOverviewMetrics(overview)
-        setChurnMetrics(churn)
-        setPlanMetrics(plans)
-        setGeoMetrics(geo)
+        setOverviewMetrics(overview.data.metrics || {})
+        setChurnMetrics(churn.data.metrics || {})
+        setPlanMetrics(plans.data.metrics || {})
+        setGeoMetrics(geo.data.metrics || {})
       } catch (err) {
         console.error('Error fetching alert data:', err)
         setError(err.message)

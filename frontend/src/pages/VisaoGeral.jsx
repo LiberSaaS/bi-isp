@@ -32,10 +32,11 @@ export const VisaoGeral = () => {
     const fetchProviders = async () => {
       try {
         setLoading(true);
-        const data = await apiService.getProviders();
-        setProviders(data);
-        if (data.length > 0) {
-          setSelectedProvider(data[0]._id);
+        const response = await apiService.getProviders();
+        const list = response.data.providers || [];
+        setProviders(list);
+        if (list.length > 0) {
+          setSelectedProvider(list[0]._id);
         }
       } catch (err) {
         setError(err.message || 'Erro ao carregar provedores');
@@ -57,8 +58,8 @@ export const VisaoGeral = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await apiService.getOverviewMetrics(selectedProvider);
-      setMetrics(data);
+      const response = await apiService.getOverviewMetrics(selectedProvider);
+      setMetrics(response.data.metrics);
     } catch (err) {
       setError(err.message || 'Erro ao carregar métricas');
     } finally {

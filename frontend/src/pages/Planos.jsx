@@ -92,22 +92,28 @@ const speedColors = {
 };
 
 export const Planos = () => {
-  const { provider } = useAuth();
+  const { user } = useAuth();
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedProvider, setSelectedProvider] = useState(provider?.id || '');
+  const [selectedProvider, setSelectedProvider] = useState('');
+
+  useEffect(() => {
+    apiService.getProviders().then(res => {
+      const list = res.data.providers || [];
+      if (list.length > 0) setSelectedProvider(list[0]._id);
+    }).catch(err => console.error('Erro ao carregar provedores:', err));
+  }, []);
 
   useEffect(() => {
     if (!selectedProvider) return;
-
     fetchMetrics();
   }, [selectedProvider]);
 
   const fetchMetrics = async () => {
     try {
       setLoading(true);
-      const data = await apiService.getPlanMetrics(selectedProvider);
-      setMetrics(data.metrics);
+      const response = await apiService.getPlanMetrics(selectedProvider);
+      setMetrics(response.data.metrics);
     } catch (error) {
       console.error('Erro ao buscar métricas de planos:', error);
     } finally {

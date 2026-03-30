@@ -143,7 +143,8 @@ const InsightBox = ({ churnMetrics }) => {
 }
 
 export const Churn = () => {
-  const { providerId } = useAuth()
+  const { user } = useAuth()
+  const [providerId, setProviderId] = useState(null)
   const [churnMetrics, setChurnMetrics] = useState(null)
   const [period, setPeriod] = useState('30')
   const [loading, setLoading] = useState(true)
@@ -151,15 +152,22 @@ export const Churn = () => {
   const [syncTime, setSyncTime] = useState(null)
 
   useEffect(() => {
-    fetchChurnMetrics()
+    apiService.getProviders().then(res => {
+      const list = res.data.providers || []
+      if (list.length > 0) setProviderId(list[0]._id)
+    }).catch(err => setError('Erro ao carregar provedores'))
+  }, [])
+
+  useEffect(() => {
+    if (providerId) fetchChurnMetrics()
   }, [providerId, period])
 
   const fetchChurnMetrics = async () => {
     setLoading(true)
     setError(null)
     try {
-      const data = await apiService.getChurnMetrics(providerId, period)
-      setChurnMetrics(data.metrics)
+      const response = await apiService.getChurnMetrics(providerId, period)
+      setChurnMetrics(response.data.metrics)
       setSyncTime(new Date())
     } catch (err) {
       setError('Erro ao carregar dados de churn')
