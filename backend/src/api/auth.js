@@ -365,4 +365,4 @@ router.post('/register', verifyToken, async (req, res) => {
   }
 });
 
-export { router, User, verifyToken };
+export { router, User };
