@@ -1,0 +1,32 @@
+{
+  "name": "isp-bi-connector",
+  "version": "1.0.0",
+  "description": "ISP Analytics BI - Backend API",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "sync:ixc": "node -e \"import('./src/connectors/ixc/index.js').then(m => m.default.syncAll())\"",
+    "sync:hubsoft": "node -e \"import('./src/connectors/hubsoft/index.js').then(m => m.default.syncAll())\"",
+    "sync:sgp": "node -e \"import('./src/connectors/sgp/index.js').then(m => m.default.syncAll())\"",
+    "sync:mkauth": "node -e \"import('./src/connectors/mkauth/index.js').then(m => m.default.syncAll())\"",
+    "validate:ixc": "node -e \"import('./src/connectors/ixc/index.js').then(m => m.default.validate())\"",
+    "validate:hubsoft": "node -e \"import('./src/connectors/hubsoft/index.js').then(m => m.default.validate())\"",
+    "validate:sgp": "node -e \"import('./src/connectors/sgp/index.js').then(m => m.default.validate())\"",
+    "validate:mkauth": "node -e \"import('./src/connectors/mkauth/index.js').then(m => m.default.validate())\""
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "mongoose": "^7.8.0",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "node-cron": "^3.0.3",
+    "winston": "^3.14.0",
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5"
+  }
+}

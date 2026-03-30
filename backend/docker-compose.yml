@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    container_name: isp-bi-api
+    ports:
+      - "${API_PORT:-3001}:3001"
+    env_file:
+      - .env
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - isp-bi-network
+
+  mongo:
+    image: mongo:4.4
+    container_name: isp-bi-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - isp-bi-network
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme}
+
+volumes:
+  mongo_data:
+    driver: local
+
+networks:
+  isp-bi-network:
+    driver: bridge
