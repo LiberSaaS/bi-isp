@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiService } from '../services/api'
 import {
@@ -8,9 +7,9 @@ import {
   RadialBarChart, RadialBar, LineChart, Line
 } from 'recharts'
 import {
-  LogOut, RefreshCw, Users, TrendingDown, TrendingUp,
+  RefreshCw, Users, TrendingDown, TrendingUp,
   AlertCircle, Wrench, CheckCircle2, DollarSign, Activity,
-  ChevronDown, Calendar, BarChart3, Wifi
+  ChevronDown, Wifi
 } from 'lucide-react'
 
 /* ═══════════════ HELPERS ═══════════════ */
@@ -157,8 +156,7 @@ const ChartTooltip = ({ active, payload, label, isCurrency }) => {
 /* ═══════════════ MAIN DASHBOARD ═══════════════ */
 
 export const Dashboard = () => {
-  const navigate = useNavigate()
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
 
   const [providers, setProviders] = useState([])
   const [selectedProvider, setSelectedProvider] = useState(null)
@@ -332,13 +330,7 @@ export const Dashboard = () => {
             {syncing ? 'Sync...' : 'Sincronizar'}
           </button>
 
-          <button
-            onClick={() => { logout(); navigate('/login') }}
-            className="p-2 rounded-lg transition-all hover:opacity-80"
-            style={{ color: T.textMuted }}
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+          {/* Logout handled by sidebar Layout */}
         </div>
       </header>
 
