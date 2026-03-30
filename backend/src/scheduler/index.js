@@ -64,7 +64,7 @@ async function syncProvider(providerId, isFullSync = false) {
 
     // Execute sync
     const startTime = Date.now();
-    await connector.sync(providerId);
+    await connector.syncAll(provider);
     const duration = Date.now() - startTime;
 
     // Update provider on success
