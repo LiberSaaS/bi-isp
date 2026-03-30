@@ -48,6 +48,10 @@ export const apiService = {
     return axiosInstance.get(`/metrics/${providerId}`)
   },
 
+  getCommercialMetrics: (providerId) => {
+    return axiosInstance.get(`/metrics/${providerId}/comercial`)
+  },
+
   getLicenseStatus: () => {
     return axiosInstance.get('/license/status')
   },

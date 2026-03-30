@@ -494,6 +494,123 @@ class AnalyticsEngine {
   }
 
   /**
+   * Get commercial metrics for a provider (activations, cancellations, status, plans)
+   * @param {string} providerId - MongoDB ObjectId
+   * @param {number} period - Days to analyse (default 30)
+   */
+  async getCommercialMetrics(providerId, period = 30) {
+    try {
+      const oid = toObjectId(providerId);
+      const now = new Date();
+      const startDate = new Date(now.getTime() - period * 24 * 60 * 60 * 1000);
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const [
+        totalCustomers,
+        activeCustomers,
+        statusDist,
+        activationsMonth,
+        activationsByMonth,
+        cancellationsByMonth,
+        planDistribution,
+        planRevenue,
+        suspendedCount,
+      ] = await Promise.all([
+        Customer.countDocuments({ providerId: oid }),
+        Customer.countDocuments({ providerId: oid, status: 'active' }),
+        // Status distribution
+        Customer.aggregate([
+          { $match: { providerId: oid } },
+          { $group: { _id: '$status', count: { $sum: 1 } } },
+          { $sort: { count: -1 } }
+        ]),
+        // Activations this month
+        Customer.countDocuments({
+          providerId: oid,
+          activationDate: { $gte: monthStart, $lte: now }
+        }),
+        // Activations by month (evolution)
+        Customer.aggregate([
+          { $match: { providerId: oid, activationDate: { $ne: null } } },
+          {
+            $group: {
+              _id: {
+                year: { $year: '$activationDate' },
+                month: { $month: '$activationDate' }
+              },
+              count: { $sum: 1 }
+            }
+          },
+          { $sort: { '_id.year': 1, '_id.month': 1 } },
+          {
+            $project: {
+              _id: 0,
+              date: { $dateFromParts: { year: '$_id.year', month: '$_id.month', day: 1 } },
+              count: 1
+            }
+          }
+        ]),
+        // Cancellations by month
+        Customer.aggregate([
+          { $match: { providerId: oid, cancellationDate: { $ne: null } } },
+          {
+            $group: {
+              _id: {
+                year: { $year: '$cancellationDate' },
+                month: { $month: '$cancellationDate' }
+              },
+              count: { $sum: 1 }
+            }
+          },
+          { $sort: { '_id.year': 1, '_id.month': 1 } },
+          {
+            $project: {
+              _id: 0,
+              date: { $dateFromParts: { year: '$_id.year', month: '$_id.month', day: 1 } },
+              count: 1
+            }
+          }
+        ]),
+        // Plan distribution (active customers only)
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'active' } },
+          { $group: { _id: '$plan.name', count: { $sum: 1 }, revenue: { $sum: '$plan.price' } } },
+          { $sort: { count: -1 } },
+          { $project: { _id: 0, planName: '$_id', customerCount: '$count', revenue: 1 } }
+        ]),
+        // Plan revenue totals
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'active' } },
+          { $group: { _id: null, totalRevenue: { $sum: '$plan.price' }, avgPrice: { $avg: '$plan.price' } } }
+        ]),
+        // Suspended count
+        Customer.countDocuments({ providerId: oid, status: 'suspended' }),
+      ]);
+
+      const cancelledTotal = await Customer.countDocuments({ providerId: oid, status: 'cancelled' });
+
+      return {
+        totalCustomers,
+        activeCustomers,
+        suspendedCount,
+        cancelledTotal,
+        activationsMonth,
+        statusDistribution: statusDist.map(s => ({ status: s._id, count: s.count })),
+        activationsByMonth,
+        cancellationsByMonth,
+        planDistribution,
+        totalPlanRevenue: planRevenue.length > 0 ? planRevenue[0].totalRevenue : 0,
+        avgPlanPrice: planRevenue.length > 0 ? parseFloat(planRevenue[0].avgPrice?.toFixed(2) || 0) : 0,
+        period,
+        generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.error('Error calculating commercial metrics', { providerId, error: error.message });
+      throw error;
+    }
+  }
+
+  /**
    * Get health metrics for a provider
    * @param {string} providerId - MongoDB ObjectId of the provider
    * @returns {Promise<Object>} Health status

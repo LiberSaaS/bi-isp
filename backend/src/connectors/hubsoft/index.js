@@ -113,7 +113,7 @@ function extractRecords(response) {
  * searchable substring, even though the API never returns more than 5 at a time.
  */
 const HUBSOFT_MAX_PER_REQUEST = 5;
-const HUBSOFT_MAX_SEARCH_DEPTH = 5;
+const HUBSOFT_MAX_SEARCH_DEPTH = 3;
 const SEARCH_CHARS = 'abcdefghijklmnopqrstuvwxyz '.split('');
 
 async function fetchAllPages(client, endpoint, searchField = null) {

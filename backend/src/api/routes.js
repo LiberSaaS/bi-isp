@@ -98,6 +98,46 @@ router.get('/metrics/:providerId', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /api/metrics/:providerId/comercial
+ * Get commercial metrics for a provider (requires JWT)
+ */
+router.get('/metrics/:providerId/comercial', verifyToken, async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const { period } = req.query;
+
+    const provider = await Provider.findById(providerId);
+    if (!provider) {
+      return res.status(404).json({ error: 'Not found', message: 'Provider not found' });
+    }
+
+    if (req.user.role !== 'admin' && req.user.providerId !== providerId) {
+      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this provider' });
+    }
+
+    const periodDays = period ? parseInt(period) : 30;
+
+    logger.info('Fetching commercial metrics for provider', {
+      providerId, period: periodDays, userId: req.user.userId
+    });
+
+    const metrics = await analyticsEngine.getCommercialMetrics(providerId, periodDays);
+
+    res.status(200).json({
+      providerId,
+      providerName: provider.name,
+      metrics,
+      lastSync: provider.lastSync
+    });
+  } catch (error) {
+    logger.error('Error fetching commercial metrics', {
+      providerId: req.params.providerId, error: error.message
+    });
+    res.status(500).json({ error: 'Server error', message: 'Could not fetch commercial metrics' });
+  }
+});
+
+/**
  * GET /api/providers
  * List all providers (requires JWT)
  */

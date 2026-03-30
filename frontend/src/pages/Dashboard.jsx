@@ -260,9 +260,8 @@ export const Dashboard = () => {
             <Wifi className="w-4 h-4 text-white" />
           </div>
           <div>
-            <span className="text-sm font-bold" style={{ color: T.textSecondary }}>./</span>
-            <span className="text-sm font-bold" style={{ color: T.textPrimary }}>ISP</span>
-            <span className="text-sm font-bold" style={{ color: T.gold }}>ANALYTICS</span>
+            <span className="text-sm font-bold" style={{ color: T.gold }}>Financeiro</span>
+            <span className="text-sm font-bold" style={{ color: T.textMuted }}> — Analiticos</span>
           </div>
         </div>
 

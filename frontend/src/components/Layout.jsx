@@ -18,7 +18,7 @@ const T = {
 }
 
 const navItems = [
-  { path: '/', label: 'Dashboard', icon: BarChart3 },
+  { path: '/', label: 'Financeiro', icon: BarChart3 },
   { path: '/comercial', label: 'Comercial', icon: ShoppingCart },
 ]
 
