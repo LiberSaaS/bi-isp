@@ -171,12 +171,37 @@ async function syncCustomers(provider, client) {
   logger.info('Starting HubSoft customer sync', { providerId: provider._id });
   
   try {
-    const customers = await fetchAllPages(client, '/integracao/cliente', 'nome_razaosocial');
+    const customers = await fetchAllPages(client, '/api/v1/integracao/cliente', 'nome_razaosocial');
     
     const operations = customers
-      .filter(customer => customer.id || customer.id_cliente || customer.codigo)
+      .filter(customer => customer.id_cliente || customer.id || customer.codigo_cliente)
       .map(customer => {
-        const extId = (customer.id || customer.id_cliente || customer.codigo)?.toString();
+        const extId = (customer.id_cliente || customer.id || customer.codigo_cliente)?.toString();
+
+        // Extract plan from first active service
+        const activeService = (customer.servicos || []).find(s =>
+          s.status_prefixo === 'servico_habilitado' || (s.status && s.status.toLowerCase().includes('habilitado'))
+        ) || (customer.servicos || [])[0];
+
+        const planName = activeService?.nome || '';
+        const planPrice = parseFloat(activeService?.valor || 0);
+        const dlSpeed = parseFloat(String(activeService?.velocidade_download || '0').replace(/[^\d.]/g, ''));
+        const ulSpeed = parseFloat(String(activeService?.velocidade_upload || '0').replace(/[^\d.]/g, ''));
+
+        // Determine status from ativo flag and service status
+        let status = 'active';
+        if (customer.ativo === false) {
+          status = 'cancelled';
+        } else if (activeService?.status_prefixo?.includes('suspenso')) {
+          status = 'suspended';
+        } else if (activeService?.status_prefixo?.includes('cancelado')) {
+          status = 'cancelled';
+        }
+
+        // Find activation/cancellation dates from services
+        const activationDate = activeService?.data_habilitacao ? new Date(activeService.data_habilitacao) : null;
+        const cancellationDate = activeService?.data_cancelamento ? new Date(activeService.data_cancelamento) : null;
+
         return {
           updateOne: {
             filter: { providerId: provider._id, externalId: extId },
@@ -184,19 +209,19 @@ async function syncCustomers(provider, client) {
               $set: {
                 providerId: provider._id,
                 externalId: extId,
-                name: customer.nome_razaosocial || customer.razao_social || customer.nome || 'Unknown',
-                document: customer.cpf_cnpj || customer.cnpj_cpf || customer.cnpj || customer.cpf || null,
-                email: customer.email || customer.email_principal || null,
-                phone: customer.telefone || customer.fone || customer.celular || null,
+                name: customer.nome_razaosocial || customer.nome_fantasia || 'Unknown',
+                document: customer.cpf_cnpj || null,
+                email: customer.email_principal || customer.email_secundario || null,
+                phone: customer.telefone_primario || customer.telefone_secundario || null,
                 plan: {
-                  name: customer.plano || customer.nome_plano || '',
-                  price: parseFloat(customer.valor_plano || customer.valor || 0),
-                  downloadSpeed: parseFloat(customer.download || 0),
-                  uploadSpeed: parseFloat(customer.upload || 0)
+                  name: planName,
+                  price: planPrice,
+                  downloadSpeed: dlSpeed,
+                  uploadSpeed: ulSpeed
                 },
-                status: mapCustomerStatus(customer.status || customer.situacao),
-                activationDate: customer.data_ativacao ? new Date(customer.data_ativacao) : null,
-                cancellationDate: customer.data_cancelamento ? new Date(customer.data_cancelamento) : null,
+                status,
+                activationDate,
+                cancellationDate,
                 address: {
                   street: customer.endereco || customer.logradouro || null,
                   number: customer.numero || null,
@@ -246,17 +271,18 @@ async function syncInvoices(provider, client) {
   logger.info('Starting HubSoft invoice sync', { providerId: provider._id });
   
   try {
-    const invoices = await fetchAllPages(client, '/integracao/cliente/financeiro');
+    const invoices = await fetchAllPages(client, '/api/v1/integracao/cliente/financeiro');
     
     // Get customers for ID lookup
     const customers = await Customer.find({ providerId: provider._id }).lean();
     const customerMap = new Map(customers.map(c => [c.externalId, c._id]));
-    
-    const operations = invoices
-      .filter(invoice => (invoice.id || invoice.id_fatura) && (invoice.cliente_id || invoice.id_cliente))
+
+    const records = extractRecords(invoices);
+    const operations = records
+      .filter(invoice => (invoice.id_fatura || invoice.id) && (invoice.id_cliente || invoice.cliente_id))
       .map(invoice => {
-        const extId = (invoice.id || invoice.id_fatura)?.toString();
-        const clienteId = (invoice.cliente_id || invoice.id_cliente)?.toString();
+        const extId = (invoice.id_fatura || invoice.id)?.toString();
+        const clienteId = (invoice.id_cliente || invoice.cliente_id)?.toString();
         return {
           updateOne: {
             filter: { providerId: provider._id, externalId: extId },
@@ -269,7 +295,7 @@ async function syncInvoices(provider, client) {
                 paidAmount: parseFloat(invoice.valor_pago || 0),
                 dueDate: new Date(invoice.data_vencimento || invoice.vencimento),
                 paymentDate: invoice.data_pagamento ? new Date(invoice.data_pagamento) : null,
-                status: mapInvoiceStatus(invoice.status || invoice.situacao),
+                status: mapInvoiceStatus(invoice.status || invoice.situacao || invoice.status_prefixo),
                 source: 'hubsoft',
                 syncedAt: new Date()
               }
@@ -312,7 +338,7 @@ async function syncServiceOrders(provider, client) {
   logger.info('Starting HubSoft service order sync', { providerId: provider._id });
   
   try {
-    const orders = await fetchAllPages(client, '/integracao/atendimento', 'assunto');
+    const orders = await fetchAllPages(client, '/api/v1/integracao/atendimento', 'assunto');
     
     // Get customers for ID lookup
     const customers = await Customer.find({ providerId: provider._id }).lean();
@@ -457,7 +483,7 @@ async function validate(provider) {
     );
     
     const client = createHubSoftClient(provider.config.url, token);
-    await makeRequest(client, '/integracao/cliente', { busca: 'nome_razaosocial', termo_busca: 'a', registros_por_pagina: 1 });
+    await makeRequest(client, '/api/v1/integracao/cliente', { busca: 'nome_razaosocial', termo_busca: 'a', registros_por_pagina: 1 });
     
     return {
       ok: true,
