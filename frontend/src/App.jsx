@@ -6,6 +6,11 @@ import { Layout } from './components/Layout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Comercial from './pages/Comercial'
+import VisaoGeral from './pages/VisaoGeral'
+import Geografico from './pages/Geografico'
+import Churn from './pages/Churn'
+import Planos from './pages/Planos'
+import Alertas from './pages/Alertas'
 
 /**
  * Protected route wrapper component
@@ -28,6 +33,13 @@ const ProtectedRoute = ({ element }) => {
 }
 
 /**
+ * Helper to wrap a page in ProtectedRoute + Layout
+ */
+const P = ({ children }) => (
+  <ProtectedRoute element={<Layout>{children}</Layout>} />
+)
+
+/**
  * Main App component with routing
  */
 function App() {
@@ -38,30 +50,13 @@ function App() {
       {isAuthenticated && <LicenseBanner />}
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute
-              element={
-                <Layout>
-                  <Dashboard />
-                </Layout>
-              }
-            />
-          }
-        />
-        <Route
-          path="/comercial"
-          element={
-            <ProtectedRoute
-              element={
-                <Layout>
-                  <Comercial />
-                </Layout>
-              }
-            />
-          }
-        />
+        <Route path="/" element={<P><Dashboard /></P>} />
+        <Route path="/comercial" element={<P><Comercial /></P>} />
+        <Route path="/visao-geral" element={<P><VisaoGeral /></P>} />
+        <Route path="/geografico" element={<P><Geografico /></P>} />
+        <Route path="/churn" element={<P><Churn /></P>} />
+        <Route path="/planos" element={<P><Planos /></P>} />
+        <Route path="/alertas" element={<P><Alertas /></P>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

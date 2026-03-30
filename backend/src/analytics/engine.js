@@ -610,6 +610,383 @@ class AnalyticsEngine {
     }
   }
 
+  /* ═══════════════════════════════════════════════════════════════
+   * GEOGRAPHIC ANALYTICS
+   * ═══════════════════════════════════════════════════════════════ */
+
+  async getGeographicMetrics(providerId) {
+    try {
+      const oid = toObjectId(providerId);
+
+      const [
+        byCity,
+        byNeighborhood,
+        activationsByCity,
+        statusByCity,
+        revenueByCity,
+      ] = await Promise.all([
+        // Clients per city
+        Customer.aggregate([
+          { $match: { providerId: oid } },
+          { $group: { _id: '$address.city', total: { $sum: 1 }, active: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } }, cancelled: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } }, suspended: { $sum: { $cond: [{ $eq: ['$status', 'suspended'] }, 1, 0] } } } },
+          { $sort: { total: -1 } },
+          { $project: { _id: 0, city: '$_id', total: 1, active: 1, cancelled: 1, suspended: 1 } }
+        ]),
+        // Clients per neighborhood
+        Customer.aggregate([
+          { $match: { providerId: oid } },
+          { $group: { _id: { city: '$address.city', neighborhood: '$address.neighborhood' }, total: { $sum: 1 }, active: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } } } },
+          { $sort: { total: -1 } },
+          { $limit: 50 },
+          { $project: { _id: 0, city: '$_id.city', neighborhood: '$_id.neighborhood', total: 1, active: 1 } }
+        ]),
+        // Activations by city (this month)
+        Customer.aggregate([
+          { $match: { providerId: oid, activationDate: { $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) } } },
+          { $group: { _id: '$address.city', activations: { $sum: 1 } } },
+          { $sort: { activations: -1 } },
+          { $project: { _id: 0, city: '$_id', activations: 1 } }
+        ]),
+        // Status distribution by city
+        Customer.aggregate([
+          { $match: { providerId: oid } },
+          { $group: { _id: { city: '$address.city', status: '$status' }, count: { $sum: 1 } } },
+          { $sort: { '_id.city': 1, count: -1 } },
+          { $project: { _id: 0, city: '$_id.city', status: '$_id.status', count: 1 } }
+        ]),
+        // Revenue potential by city (sum of plan prices for active customers)
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'active' } },
+          { $group: { _id: '$address.city', revenue: { $sum: '$plan.price' }, avgTicket: { $avg: '$plan.price' }, count: { $sum: 1 } } },
+          { $sort: { revenue: -1 } },
+          { $project: { _id: 0, city: '$_id', revenue: 1, avgTicket: { $round: ['$avgTicket', 2] }, count: 1 } }
+        ]),
+      ]);
+
+      return {
+        byCity,
+        byNeighborhood,
+        activationsByCity,
+        statusByCity,
+        revenueByCity,
+        generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.error('Error calculating geographic metrics', { providerId, error: error.message });
+      throw error;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+   * CHURN ANALYTICS
+   * ═══════════════════════════════════════════════════════════════ */
+
+  async getChurnMetrics(providerId, period = 90) {
+    try {
+      const oid = toObjectId(providerId);
+      const now = new Date();
+      const startDate = new Date(now.getTime() - period * 24 * 60 * 60 * 1000);
+
+      const [
+        churnByMonth,
+        churnByPlan,
+        churnByCity,
+        churnReasons,
+        customerLifetime,
+        activeCount,
+        cancelledInPeriod,
+        suspendedCount,
+        totalCustomers,
+      ] = await Promise.all([
+        // Cancellations by month
+        Customer.aggregate([
+          { $match: { providerId: oid, cancellationDate: { $ne: null } } },
+          { $group: { _id: { year: { $year: '$cancellationDate' }, month: { $month: '$cancellationDate' } }, count: { $sum: 1 } } },
+          { $sort: { '_id.year': 1, '_id.month': 1 } },
+          { $project: { _id: 0, date: { $dateFromParts: { year: '$_id.year', month: '$_id.month', day: 1 } }, count: 1 } }
+        ]),
+        // Churn by plan
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'cancelled' } },
+          { $group: { _id: '$plan.name', cancelled: { $sum: 1 } } },
+          { $sort: { cancelled: -1 } },
+          { $project: { _id: 0, plan: '$_id', cancelled: 1 } }
+        ]),
+        // Churn by city
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'cancelled' } },
+          { $group: { _id: '$address.city', cancelled: { $sum: 1 } } },
+          { $sort: { cancelled: -1 } },
+          { $project: { _id: 0, city: '$_id', cancelled: 1 } }
+        ]),
+        // Cancellation reasons
+        Customer.aggregate([
+          { $match: { providerId: oid, cancellationReason: { $ne: null, $ne: '' } } },
+          { $group: { _id: '$cancellationReason', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $project: { _id: 0, reason: '$_id', count: 1 } }
+        ]),
+        // Average customer lifetime (activation to cancellation, in days)
+        Customer.aggregate([
+          { $match: { providerId: oid, activationDate: { $ne: null }, cancellationDate: { $ne: null } } },
+          { $project: { lifetime: { $divide: [{ $subtract: ['$cancellationDate', '$activationDate'] }, 86400000] } } },
+          { $group: { _id: null, avgDays: { $avg: '$lifetime' }, minDays: { $min: '$lifetime' }, maxDays: { $max: '$lifetime' }, count: { $sum: 1 } } }
+        ]),
+        Customer.countDocuments({ providerId: oid, status: 'active' }),
+        Customer.countDocuments({ providerId: oid, status: 'cancelled', cancellationDate: { $gte: startDate } }),
+        Customer.countDocuments({ providerId: oid, status: 'suspended' }),
+        Customer.countDocuments({ providerId: oid }),
+      ]);
+
+      const churnRate = activeCount > 0 ? (cancelledInPeriod / (activeCount + cancelledInPeriod)) * 100 : 0;
+      const lifetime = customerLifetime.length > 0 ? customerLifetime[0] : { avgDays: 0, minDays: 0, maxDays: 0, count: 0 };
+
+      return {
+        churnRate: parseFloat(churnRate.toFixed(2)),
+        totalCustomers,
+        activeCount,
+        cancelledInPeriod,
+        suspendedCount,
+        avgLifetimeDays: Math.round(lifetime.avgDays || 0),
+        avgLifetimeMonths: parseFloat(((lifetime.avgDays || 0) / 30).toFixed(1)),
+        churnByMonth,
+        churnByPlan,
+        churnByCity,
+        churnReasons,
+        period,
+        generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.error('Error calculating churn metrics', { providerId, error: error.message });
+      throw error;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+   * PLAN PORTFOLIO ANALYTICS
+   * ═══════════════════════════════════════════════════════════════ */
+
+  async getPlanMetrics(providerId) {
+    try {
+      const oid = toObjectId(providerId);
+
+      const [
+        planOverview,
+        planByStatus,
+        speedDistribution,
+        technologyDistribution,
+        planPriceRanges,
+        topPlansByRevenue,
+      ] = await Promise.all([
+        // Plan overview (all customers)
+        Customer.aggregate([
+          { $match: { providerId: oid } },
+          { $group: { _id: '$plan.name', total: { $sum: 1 }, active: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } }, cancelled: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } }, suspended: { $sum: { $cond: [{ $eq: ['$status', 'suspended'] }, 1, 0] } }, avgPrice: { $avg: '$plan.price' }, totalRevenue: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, '$plan.price', 0] } } } },
+          { $sort: { active: -1 } },
+          { $project: { _id: 0, plan: '$_id', total: 1, active: 1, cancelled: 1, suspended: 1, avgPrice: { $round: ['$avgPrice', 2] }, totalRevenue: { $round: ['$totalRevenue', 2] }, churnRate: { $cond: [{ $gt: ['$total', 0] }, { $round: [{ $multiply: [{ $divide: ['$cancelled', '$total'] }, 100] }, 2] }, 0] } } }
+        ]),
+        // Customers per plan per status
+        Customer.aggregate([
+          { $match: { providerId: oid } },
+          { $group: { _id: { plan: '$plan.name', status: '$status' }, count: { $sum: 1 } } },
+          { $project: { _id: 0, plan: '$_id.plan', status: '$_id.status', count: 1 } }
+        ]),
+        // Download speed distribution
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'active', 'plan.downloadSpeed': { $gt: 0 } } },
+          { $group: { _id: '$plan.downloadSpeed', count: { $sum: 1 }, planName: { $first: '$plan.name' } } },
+          { $sort: { _id: 1 } },
+          { $project: { _id: 0, speed: '$_id', count: 1, planName: 1 } }
+        ]),
+        // Technology distribution (from plan name patterns)
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'active' } },
+          { $group: { _id: '$plan.name', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $project: { _id: 0, plan: '$_id', count: 1 } }
+        ]),
+        // Price range distribution
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'active', 'plan.price': { $gt: 0 } } },
+          {
+            $bucket: {
+              groupBy: '$plan.price',
+              boundaries: [0, 50, 80, 100, 130, 150, 200, 300, 500, 10000],
+              default: 'Outros',
+              output: { count: { $sum: 1 }, avgSpeed: { $avg: '$plan.downloadSpeed' } }
+            }
+          }
+        ]),
+        // Top plans by revenue
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'active' } },
+          { $group: { _id: '$plan.name', revenue: { $sum: '$plan.price' }, count: { $sum: 1 }, avgPrice: { $avg: '$plan.price' }, avgSpeed: { $avg: '$plan.downloadSpeed' } } },
+          { $sort: { revenue: -1 } },
+          { $limit: 15 },
+          { $project: { _id: 0, plan: '$_id', revenue: { $round: ['$revenue', 2] }, count: 1, avgPrice: { $round: ['$avgPrice', 2] }, avgSpeed: { $round: ['$avgSpeed', 0] } } }
+        ]),
+      ]);
+
+      // Overall stats
+      const totalActive = await Customer.countDocuments({ providerId: oid, status: 'active' });
+      const totalMRR = topPlansByRevenue.reduce((s, p) => s + p.revenue, 0);
+      const avgARPU = totalActive > 0 ? totalMRR / totalActive : 0;
+      const uniquePlans = planOverview.length;
+
+      return {
+        totalActive,
+        totalMRR: parseFloat(totalMRR.toFixed(2)),
+        avgARPU: parseFloat(avgARPU.toFixed(2)),
+        uniquePlans,
+        planOverview,
+        planByStatus,
+        speedDistribution,
+        technologyDistribution,
+        planPriceRanges,
+        topPlansByRevenue,
+        generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.error('Error calculating plan metrics', { providerId, error: error.message });
+      throw error;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+   * OVERVIEW / VISÃO GERAL (Smart Insights)
+   * ═══════════════════════════════════════════════════════════════ */
+
+  async getOverviewMetrics(providerId) {
+    try {
+      const oid = toObjectId(providerId);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      const weekAgo = new Date(now.getTime() - 7 * 86400000);
+
+      const [
+        totalCustomers,
+        activeCustomers,
+        suspendedCustomers,
+        cancelledCustomers,
+        activationsToday,
+        activationsMonth,
+        activationsLastMonth,
+        cancellationsMonth,
+        cancellationsLastMonth,
+        mrrData,
+        invoiceStats,
+        topCities,
+        topPlans,
+        recentActivations,
+        recentCancellations,
+      ] = await Promise.all([
+        Customer.countDocuments({ providerId: oid }),
+        Customer.countDocuments({ providerId: oid, status: 'active' }),
+        Customer.countDocuments({ providerId: oid, status: 'suspended' }),
+        Customer.countDocuments({ providerId: oid, status: 'cancelled' }),
+        Customer.countDocuments({ providerId: oid, activationDate: { $gte: today } }),
+        Customer.countDocuments({ providerId: oid, activationDate: { $gte: monthStart } }),
+        Customer.countDocuments({ providerId: oid, activationDate: { $gte: lastMonthStart, $lte: lastMonthEnd } }),
+        Customer.countDocuments({ providerId: oid, cancellationDate: { $gte: monthStart } }),
+        Customer.countDocuments({ providerId: oid, cancellationDate: { $gte: lastMonthStart, $lte: lastMonthEnd } }),
+        // MRR
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'active' } },
+          { $group: { _id: null, mrr: { $sum: '$plan.price' } } }
+        ]),
+        // Invoice stats (period)
+        Invoice.aggregate([
+          { $match: { providerId: oid, dueDate: { $gte: monthStart } } },
+          { $group: { _id: '$status', total: { $sum: '$amount' }, count: { $sum: 1 } } }
+        ]),
+        // Top 5 cities
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'active' } },
+          { $group: { _id: '$address.city', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 5 },
+          { $project: { _id: 0, city: '$_id', count: 1 } }
+        ]),
+        // Top 5 plans
+        Customer.aggregate([
+          { $match: { providerId: oid, status: 'active' } },
+          { $group: { _id: '$plan.name', count: { $sum: 1 }, revenue: { $sum: '$plan.price' } } },
+          { $sort: { count: -1 } },
+          { $limit: 5 },
+          { $project: { _id: 0, plan: '$_id', count: 1, revenue: { $round: ['$revenue', 2] } } }
+        ]),
+        // Recent activations (last 10)
+        Customer.find({ providerId: oid, activationDate: { $ne: null } })
+          .sort({ activationDate: -1 }).limit(10)
+          .select('name plan.name address.city activationDate status').lean(),
+        // Recent cancellations (last 10)
+        Customer.find({ providerId: oid, cancellationDate: { $ne: null } })
+          .sort({ cancellationDate: -1 }).limit(10)
+          .select('name plan.name address.city cancellationDate cancellationReason status').lean(),
+      ]);
+
+      const mrr = mrrData.length > 0 ? mrrData[0].mrr : 0;
+      const arpu = activeCustomers > 0 ? mrr / activeCustomers : 0;
+      const netGrowthMonth = activationsMonth - cancellationsMonth;
+      const netGrowthLastMonth = activationsLastMonth - cancellationsLastMonth;
+      const churnRateMonth = activeCustomers > 0 ? (cancellationsMonth / (activeCustomers + cancellationsMonth)) * 100 : 0;
+
+      // Generate smart insights
+      const insights = [];
+      if (cancellationsMonth > cancellationsLastMonth * 1.2) {
+        insights.push({ type: 'danger', msg: `Churn subiu ${((cancellationsMonth / Math.max(cancellationsLastMonth, 1) - 1) * 100).toFixed(0)}% em relacao ao mes anterior` });
+      }
+      if (activationsMonth < activationsLastMonth * 0.8 && activationsLastMonth > 0) {
+        insights.push({ type: 'warning', msg: `Ativacoes caíram ${((1 - activationsMonth / activationsLastMonth) * 100).toFixed(0)}% vs mes anterior` });
+      }
+      if (activationsMonth > activationsLastMonth * 1.2 && activationsLastMonth > 0) {
+        insights.push({ type: 'success', msg: `Ativacoes subiram ${((activationsMonth / activationsLastMonth - 1) * 100).toFixed(0)}% vs mes anterior` });
+      }
+      if (churnRateMonth > 5) {
+        insights.push({ type: 'danger', msg: `Churn rate de ${churnRateMonth.toFixed(1)}% esta acima da meta de 5%` });
+      }
+      if (netGrowthMonth < 0) {
+        insights.push({ type: 'danger', msg: `Saldo negativo: ${Math.abs(netGrowthMonth)} clientes a menos este mes` });
+      } else if (netGrowthMonth > 0) {
+        insights.push({ type: 'success', msg: `Crescimento líquido: +${netGrowthMonth} clientes este mes` });
+      }
+      const suspendedPct = totalCustomers > 0 ? (suspendedCustomers / totalCustomers * 100) : 0;
+      if (suspendedPct > 10) {
+        insights.push({ type: 'warning', msg: `${suspendedPct.toFixed(1)}% da base esta suspensa — risco de churn` });
+      }
+
+      return {
+        totalCustomers,
+        activeCustomers,
+        suspendedCustomers,
+        cancelledCustomers,
+        activationsToday,
+        activationsMonth,
+        activationsLastMonth,
+        cancellationsMonth,
+        cancellationsLastMonth,
+        netGrowthMonth,
+        netGrowthLastMonth,
+        mrr: parseFloat(mrr.toFixed(2)),
+        arpu: parseFloat(arpu.toFixed(2)),
+        churnRateMonth: parseFloat(churnRateMonth.toFixed(2)),
+        invoiceStats,
+        topCities,
+        topPlans,
+        recentActivations,
+        recentCancellations,
+        insights,
+        generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.error('Error calculating overview metrics', { providerId, error: error.message });
+      throw error;
+    }
+  }
+
   /**
    * Get health metrics for a provider
    * @param {string} providerId - MongoDB ObjectId of the provider

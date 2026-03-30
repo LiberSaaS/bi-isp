@@ -52,6 +52,22 @@ export const apiService = {
     return axiosInstance.get(`/metrics/${providerId}/comercial`)
   },
 
+  getOverviewMetrics: (providerId) => {
+    return axiosInstance.get(`/metrics/${providerId}/overview`)
+  },
+
+  getGeographicMetrics: (providerId) => {
+    return axiosInstance.get(`/metrics/${providerId}/geographic`)
+  },
+
+  getChurnMetrics: (providerId, period) => {
+    return axiosInstance.get(`/metrics/${providerId}/churn`, { params: { period } })
+  },
+
+  getPlanMetrics: (providerId) => {
+    return axiosInstance.get(`/metrics/${providerId}/plans`)
+  },
+
   getLicenseStatus: () => {
     return axiosInstance.get('/license/status')
   },

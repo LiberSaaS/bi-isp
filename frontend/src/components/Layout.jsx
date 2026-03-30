@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
-  BarChart3, ShoppingCart, LogOut, Wifi, Menu, X, ChevronRight
+  BarChart3, ShoppingCart, LogOut, Wifi, Menu, X, ChevronRight,
+  LayoutDashboard, MapPin, TrendingDown, Package, AlertTriangle
 } from 'lucide-react'
 
 const T = {
@@ -18,8 +19,13 @@ const T = {
 }
 
 const navItems = [
+  { path: '/visao-geral', label: 'Visão Geral', icon: LayoutDashboard },
   { path: '/', label: 'Financeiro', icon: BarChart3 },
   { path: '/comercial', label: 'Comercial', icon: ShoppingCart },
+  { path: '/geografico', label: 'Geográfico', icon: MapPin },
+  { path: '/churn', label: 'Churn', icon: TrendingDown },
+  { path: '/planos', label: 'Planos', icon: Package },
+  { path: '/alertas', label: 'Alertas', icon: AlertTriangle },
 ]
 
 export const Layout = ({ children }) => {

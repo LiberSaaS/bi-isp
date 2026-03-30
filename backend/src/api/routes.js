@@ -138,6 +138,75 @@ router.get('/metrics/:providerId/comercial', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /api/metrics/:providerId/overview
+ */
+router.get('/metrics/:providerId/overview', verifyToken, async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const provider = await Provider.findById(providerId);
+    if (!provider) return res.status(404).json({ error: 'Provider not found' });
+    if (req.user.role !== 'admin' && req.user.providerId !== providerId) return res.status(403).json({ error: 'Forbidden' });
+    const metrics = await analyticsEngine.getOverviewMetrics(providerId);
+    res.json({ providerId, providerName: provider.name, metrics, lastSync: provider.lastSync });
+  } catch (error) {
+    logger.error('Error fetching overview metrics', { error: error.message });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * GET /api/metrics/:providerId/geographic
+ */
+router.get('/metrics/:providerId/geographic', verifyToken, async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const provider = await Provider.findById(providerId);
+    if (!provider) return res.status(404).json({ error: 'Provider not found' });
+    if (req.user.role !== 'admin' && req.user.providerId !== providerId) return res.status(403).json({ error: 'Forbidden' });
+    const metrics = await analyticsEngine.getGeographicMetrics(providerId);
+    res.json({ providerId, providerName: provider.name, metrics, lastSync: provider.lastSync });
+  } catch (error) {
+    logger.error('Error fetching geographic metrics', { error: error.message });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * GET /api/metrics/:providerId/churn
+ */
+router.get('/metrics/:providerId/churn', verifyToken, async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const { period } = req.query;
+    const provider = await Provider.findById(providerId);
+    if (!provider) return res.status(404).json({ error: 'Provider not found' });
+    if (req.user.role !== 'admin' && req.user.providerId !== providerId) return res.status(403).json({ error: 'Forbidden' });
+    const metrics = await analyticsEngine.getChurnMetrics(providerId, period ? parseInt(period) : 90);
+    res.json({ providerId, providerName: provider.name, metrics, lastSync: provider.lastSync });
+  } catch (error) {
+    logger.error('Error fetching churn metrics', { error: error.message });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
+ * GET /api/metrics/:providerId/plans
+ */
+router.get('/metrics/:providerId/plans', verifyToken, async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const provider = await Provider.findById(providerId);
+    if (!provider) return res.status(404).json({ error: 'Provider not found' });
+    if (req.user.role !== 'admin' && req.user.providerId !== providerId) return res.status(403).json({ error: 'Forbidden' });
+    const metrics = await analyticsEngine.getPlanMetrics(providerId);
+    res.json({ providerId, providerName: provider.name, metrics, lastSync: provider.lastSync });
+  } catch (error) {
+    logger.error('Error fetching plan metrics', { error: error.message });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
  * GET /api/providers
  * List all providers (requires JWT)
  */
