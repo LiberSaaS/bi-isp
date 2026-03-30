@@ -29,8 +29,21 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/isp-bi';
  * Middleware Setup
  */
 
-// Security middleware
-app.use(helmet());
+// Security middleware — disable upgradeInsecureRequests so assets load over HTTP
+// when no TLS is configured, and allow inline scripts for Vite-built frontend
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", "data:"],
+      upgradeInsecureRequests: null
+    }
+  }
+}));
 
 // CORS configuration
 const corsOptions = {
