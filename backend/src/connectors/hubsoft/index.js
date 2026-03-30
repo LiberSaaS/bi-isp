@@ -277,19 +277,37 @@ async function syncCustomers(provider, client) {
  */
 async function syncInvoices(provider, client) {
   logger.info('Starting HubSoft invoice sync', { providerId: provider._id });
-  
-  try {
-    const invoices = await fetchAllPages(client, '/api/v1/integracao/cliente/financeiro');
 
-    // Get customers for ID lookup
+  try {
+    // HubSoft financeiro endpoint requires searching by customer ID.
+    // We iterate over all synced customers and fetch invoices per customer.
     const customers = await Customer.find({ providerId: provider._id }).lean();
     const customerMap = new Map(customers.map(c => [c.externalId, c._id]));
 
-    const operations = invoices
-      .filter(invoice => (invoice.id_fatura || invoice.id) && (invoice.id_cliente || invoice.cliente_id))
+    const allInvoices = [];
+    for (const customer of customers) {
+      try {
+        const response = await makeRequest(client, '/api/v1/integracao/financeiro', {
+          busca: 'id_cliente',
+          termo_busca: customer.externalId
+        });
+        const records = extractRecords(response);
+        for (const inv of records) {
+          inv._customerExternalId = customer.externalId;
+        }
+        allInvoices.push(...records);
+      } catch (error) {
+        logger.warn(`Failed to fetch invoices for customer ${customer.externalId}`, { error: error.message });
+      }
+    }
+
+    logger.info(`HubSoft fetched ${allInvoices.length} invoices from ${customers.length} customers`);
+
+    const operations = allInvoices
+      .filter(invoice => (invoice.id_fatura || invoice.id))
       .map(invoice => {
         const extId = (invoice.id_fatura || invoice.id)?.toString();
-        const clienteId = (invoice.id_cliente || invoice.cliente_id)?.toString();
+        const clienteId = (invoice.id_cliente || invoice._customerExternalId)?.toString();
         return {
           updateOne: {
             filter: { providerId: provider._id, externalId: extId },
@@ -311,22 +329,22 @@ async function syncInvoices(provider, client) {
           }
         };
       });
-    
+
     if (operations.length === 0) {
       logger.info('No invoices found for sync', { providerId: provider._id });
       return 0;
     }
-    
+
     const result = await Invoice.bulkWrite(operations, { ordered: false });
     const syncedCount = result.upsertedCount + result.modifiedCount;
-    
+
     logger.info('HubSoft invoice sync completed', {
       providerId: provider._id,
       synced: syncedCount,
       upserted: result.upsertedCount,
       modified: result.modifiedCount
     });
-    
+
     return syncedCount;
   } catch (error) {
     logger.error('HubSoft invoice sync failed', {
@@ -343,8 +361,18 @@ async function syncInvoices(provider, client) {
  */
 async function syncServiceOrders(provider, client) {
   logger.info('Starting HubSoft service order sync', { providerId: provider._id });
-  
+
   try {
+    // Test if the endpoint is available first (some HubSoft instances don't have it enabled)
+    const testResponse = await makeRequest(client, '/api/v1/integracao/atendimento', {
+      busca: 'assunto', termo_busca: 'a', 'página': 1, 'itens_por_página': 1
+    });
+    if (testResponse && testResponse.status === 'error' &&
+        (testResponse.msg || '').toLowerCase().includes('não disponível')) {
+      logger.info('HubSoft service order endpoint not available for this instance', { providerId: provider._id });
+      return 0;
+    }
+
     const orders = await fetchAllPages(client, '/api/v1/integracao/atendimento', 'assunto');
     
     // Get customers for ID lookup
