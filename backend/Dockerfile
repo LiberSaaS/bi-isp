@@ -26,22 +26,20 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/scripts ./scripts
 
-# Copy frontend distribution (if available)
-COPY frontend-dist/ ./frontend-dist/ 2>/dev/null || true
+# Create logs directory and frontend-dist placeholder
+RUN mkdir -p /app/logs /app/frontend-dist
 
-# Create logs directory
-RUN mkdir -p /app/logs
+# Copy frontend distribution (built outside Docker)
+COPY frontend-dist/ ./frontend-dist/
 
-# Create non-root user for security
-RUN addgroup -g 1001 node && adduser -u 1001 -G node -s /bin/sh node
-USER node
+# Expose API port
 
 # Expose API port
 EXPOSE 3001
 
 # Healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3001/health || exit 1
+  CMD curl -f http://localhost:3001/api/health || exit 1
 
 # Start application
 CMD ["node", "src/index.js"]
