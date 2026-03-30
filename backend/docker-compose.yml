@@ -18,8 +18,6 @@ services:
     image: mongo:4.4
     container_name: isp-bi-mongo
     restart: unless-stopped
-    ports:
-      - "27017:27017"
     volumes:
       - mongo_data:/data/db
     networks:
