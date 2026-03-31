@@ -286,7 +286,7 @@ export const Geografico = () => {
         const list = response.data.providers || [];
         setProviders(list);
         if (list && list.length > 0) {
-          setSelectedProvider(list[0].id);
+          setSelectedProvider(list[0]._id);
         }
       } catch (err) {
         console.error('Error fetching providers:', err);
