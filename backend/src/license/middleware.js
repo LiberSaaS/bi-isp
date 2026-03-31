@@ -35,16 +35,25 @@ export const checkLicense = async (req, res, next) => {
       });
     }
 
-    // For expired or unknown licenses, allow only read operations
-    if (licenseStatus.status === 'expired' || licenseStatus.status === 'unknown') {
+    // For unknown status (server unreachable), allow all operations (grace period)
+    if (licenseStatus.status === 'unknown') {
+      logger.info('License server unreachable, allowing request in grace mode', {
+        method: req.method,
+        path: req.path
+      });
+      return next();
+    }
+
+    // For expired licenses, allow only read operations
+    if (licenseStatus.status === 'expired') {
       if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-        logger.warn('Write operation attempted with expired/unknown license', {
+        logger.warn('Write operation attempted with expired license', {
           method: req.method,
           path: req.path,
           status: licenseStatus.status
         });
         return res.status(403).json({
-          error: 'License unavailable or expired',
+          error: 'License expired',
           message: 'Write operations are disabled. Only read operations are allowed.',
           status: licenseStatus.status,
           gracePeriodActive: licenseStatus.gracePeriod === true
