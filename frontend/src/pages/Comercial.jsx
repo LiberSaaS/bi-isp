@@ -145,7 +145,7 @@ export const Comercial = () => {
   useEffect(() => {
     if (!selectedProvider) return
     setLoading(true); setError('')
-    apiService.getCommercialMetrics(selectedProvider).then(res => {
+    apiService.getCommercialMetrics(selectedProvider, parseInt(period)).then(res => {
       setMetrics(res.data)
       setLastSync(res.data.lastSync)
     }).catch(() => setError('Erro ao carregar metricas comerciais'))
@@ -157,7 +157,7 @@ export const Comercial = () => {
     setSyncing(true)
     try {
       await apiService.triggerSync(selectedProvider)
-      const res = await apiService.getCommercialMetrics(selectedProvider)
+      const res = await apiService.getCommercialMetrics(selectedProvider, parseInt(period))
       setMetrics(res.data)
     } catch { setError('Erro ao sincronizar') }
     finally { setSyncing(false) }

@@ -44,16 +44,16 @@ export const apiService = {
     return axiosInstance.get('/auth/me')
   },
 
-  getMetrics: (providerId) => {
-    return axiosInstance.get(`/metrics/${providerId}`)
+  getMetrics: (providerId, period) => {
+    return axiosInstance.get(`/metrics/${providerId}`, { params: { period } })
   },
 
-  getCommercialMetrics: (providerId) => {
-    return axiosInstance.get(`/metrics/${providerId}/comercial`)
+  getCommercialMetrics: (providerId, period) => {
+    return axiosInstance.get(`/metrics/${providerId}/comercial`, { params: { period } })
   },
 
-  getOverviewMetrics: (providerId) => {
-    return axiosInstance.get(`/metrics/${providerId}/overview`)
+  getOverviewMetrics: (providerId, period) => {
+    return axiosInstance.get(`/metrics/${providerId}/overview`, { params: { period } })
   },
 
   getGeographicMetrics: (providerId) => {

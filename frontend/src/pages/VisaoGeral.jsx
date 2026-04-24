@@ -58,7 +58,7 @@ export const VisaoGeral = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiService.getOverviewMetrics(selectedProvider);
+      const response = await apiService.getOverviewMetrics(selectedProvider, period);
       setMetrics(response.data.metrics);
     } catch (err) {
       setError(err.message || 'Erro ao carregar métricas');

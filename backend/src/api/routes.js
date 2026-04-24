@@ -143,10 +143,11 @@ router.get('/metrics/:providerId/comercial', verifyToken, async (req, res) => {
 router.get('/metrics/:providerId/overview', verifyToken, async (req, res) => {
   try {
     const { providerId } = req.params;
+    const { period } = req.query;
     const provider = await Provider.findById(providerId);
     if (!provider) return res.status(404).json({ error: 'Provider not found' });
     if (req.user.role !== 'admin' && req.user.providerId !== providerId) return res.status(403).json({ error: 'Forbidden' });
-    const metrics = await analyticsEngine.getOverviewMetrics(providerId);
+    const metrics = await analyticsEngine.getOverviewMetrics(providerId, period || 'current');
     res.json({ providerId, providerName: provider.name, metrics, lastSync: provider.lastSync });
   } catch (error) {
     logger.error('Error fetching overview metrics', { error: error.message });

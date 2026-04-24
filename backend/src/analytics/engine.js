@@ -524,14 +524,14 @@ class AnalyticsEngine {
           { $group: { _id: '$status', count: { $sum: 1 } } },
           { $sort: { count: -1 } }
         ]),
-        // Activations this month
+        // Activations no período (usa startDate calculado pelo period)
         Customer.countDocuments({
           providerId: oid,
-          activationDate: { $gte: monthStart, $lte: now }
+          activationDate: { $gte: startDate, $lte: now }
         }),
-        // Activations by month (evolution)
+        // Activations by month (evolution dentro do período)
         Customer.aggregate([
-          { $match: { providerId: oid, activationDate: { $ne: null } } },
+          { $match: { providerId: oid, activationDate: { $gte: startDate } } },
           {
             $group: {
               _id: {
@@ -550,9 +550,9 @@ class AnalyticsEngine {
             }
           }
         ]),
-        // Cancellations by month
+        // Cancellations by month dentro do período
         Customer.aggregate([
-          { $match: { providerId: oid, cancellationDate: { $ne: null } } },
+          { $match: { providerId: oid, cancellationDate: { $gte: startDate } } },
           {
             $group: {
               _id: {
@@ -856,7 +856,7 @@ class AnalyticsEngine {
    * OVERVIEW / VISÃO GERAL (Smart Insights)
    * ═══════════════════════════════════════════════════════════════ */
 
-  async getOverviewMetrics(providerId) {
+  async getOverviewMetrics(providerId, period = 'current') {
     try {
       const oid = toObjectId(providerId);
       const now = new Date();
@@ -866,16 +866,36 @@ class AnalyticsEngine {
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
       const weekAgo = new Date(now.getTime() - 7 * 86400000);
 
+      // Calcula janela do período escolhido
+      let periodStart, periodEnd, prevPeriodStart, prevPeriodEnd;
+      if (period === 'previous') {
+        periodStart = lastMonthStart;
+        periodEnd = lastMonthEnd;
+        prevPeriodStart = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+        prevPeriodEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59);
+      } else if (period === 'ytd') {
+        periodStart = new Date(now.getFullYear(), 0, 1);
+        periodEnd = now;
+        prevPeriodStart = new Date(now.getFullYear() - 1, 0, 1);
+        prevPeriodEnd = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate(), 23, 59, 59);
+      } else {
+        // 'current' (default)
+        periodStart = monthStart;
+        periodEnd = now;
+        prevPeriodStart = lastMonthStart;
+        prevPeriodEnd = lastMonthEnd;
+      }
+
       const [
         totalCustomers,
         activeCustomers,
         suspendedCustomers,
         cancelledCustomers,
         activationsToday,
-        activationsMonth,
-        activationsLastMonth,
-        cancellationsMonth,
-        cancellationsLastMonth,
+        activationsPeriod,
+        activationsLastPeriod,
+        cancellationsPeriod,
+        cancellationsLastPeriod,
         mrrData,
         invoiceStats,
         topCities,
@@ -888,10 +908,10 @@ class AnalyticsEngine {
         Customer.countDocuments({ providerId: oid, status: 'suspended' }),
         Customer.countDocuments({ providerId: oid, status: 'cancelled' }),
         Customer.countDocuments({ providerId: oid, activationDate: { $gte: today } }),
-        Customer.countDocuments({ providerId: oid, activationDate: { $gte: monthStart } }),
-        Customer.countDocuments({ providerId: oid, activationDate: { $gte: lastMonthStart, $lte: lastMonthEnd } }),
-        Customer.countDocuments({ providerId: oid, cancellationDate: { $gte: monthStart } }),
-        Customer.countDocuments({ providerId: oid, cancellationDate: { $gte: lastMonthStart, $lte: lastMonthEnd } }),
+        Customer.countDocuments({ providerId: oid, activationDate: { $gte: periodStart, $lte: periodEnd } }),
+        Customer.countDocuments({ providerId: oid, activationDate: { $gte: prevPeriodStart, $lte: prevPeriodEnd } }),
+        Customer.countDocuments({ providerId: oid, cancellationDate: { $gte: periodStart, $lte: periodEnd } }),
+        Customer.countDocuments({ providerId: oid, cancellationDate: { $gte: prevPeriodStart, $lte: prevPeriodEnd } }),
         // MRR
         Customer.aggregate([
           { $match: { providerId: oid, status: 'active' } },
@@ -899,7 +919,7 @@ class AnalyticsEngine {
         ]),
         // Invoice stats (period)
         Invoice.aggregate([
-          { $match: { providerId: oid, dueDate: { $gte: monthStart } } },
+          { $match: { providerId: oid, dueDate: { $gte: periodStart, $lte: periodEnd } } },
           { $group: { _id: '$status', total: { $sum: '$amount' }, count: { $sum: 1 } } }
         ]),
         // Top 5 cities
@@ -930,28 +950,28 @@ class AnalyticsEngine {
 
       const mrr = mrrData.length > 0 ? mrrData[0].mrr : 0;
       const arpu = activeCustomers > 0 ? mrr / activeCustomers : 0;
-      const netGrowthMonth = activationsMonth - cancellationsMonth;
-      const netGrowthLastMonth = activationsLastMonth - cancellationsLastMonth;
-      const churnRateMonth = activeCustomers > 0 ? (cancellationsMonth / (activeCustomers + cancellationsMonth)) * 100 : 0;
+      const netGrowthPeriod = activationsPeriod - cancellationsPeriod;
+      const netGrowthLastPeriod = activationsLastPeriod - cancellationsLastPeriod;
+      const churnRatePeriod = activeCustomers > 0 ? (cancellationsPeriod / (activeCustomers + cancellationsPeriod)) * 100 : 0;
 
       // Generate smart insights
       const insights = [];
-      if (cancellationsMonth > cancellationsLastMonth * 1.2) {
-        insights.push({ type: 'danger', msg: `Churn subiu ${((cancellationsMonth / Math.max(cancellationsLastMonth, 1) - 1) * 100).toFixed(0)}% em relacao ao mes anterior` });
+      if (cancellationsPeriod > cancellationsLastPeriod * 1.2) {
+        insights.push({ type: 'danger', msg: `Churn subiu ${((cancellationsPeriod / Math.max(cancellationsLastPeriod, 1) - 1) * 100).toFixed(0)}% em relacao ao período anterior` });
       }
-      if (activationsMonth < activationsLastMonth * 0.8 && activationsLastMonth > 0) {
-        insights.push({ type: 'warning', msg: `Ativacoes caíram ${((1 - activationsMonth / activationsLastMonth) * 100).toFixed(0)}% vs mes anterior` });
+      if (activationsPeriod < activationsLastPeriod * 0.8 && activationsLastPeriod > 0) {
+        insights.push({ type: 'warning', msg: `Ativacoes caíram ${((1 - activationsPeriod / activationsLastPeriod) * 100).toFixed(0)}% vs período anterior` });
       }
-      if (activationsMonth > activationsLastMonth * 1.2 && activationsLastMonth > 0) {
-        insights.push({ type: 'success', msg: `Ativacoes subiram ${((activationsMonth / activationsLastMonth - 1) * 100).toFixed(0)}% vs mes anterior` });
+      if (activationsPeriod > activationsLastPeriod * 1.2 && activationsLastPeriod > 0) {
+        insights.push({ type: 'success', msg: `Ativacoes subiram ${((activationsPeriod / activationsLastPeriod - 1) * 100).toFixed(0)}% vs período anterior` });
       }
-      if (churnRateMonth > 5) {
-        insights.push({ type: 'danger', msg: `Churn rate de ${churnRateMonth.toFixed(1)}% esta acima da meta de 5%` });
+      if (churnRatePeriod > 5) {
+        insights.push({ type: 'danger', msg: `Churn rate de ${churnRatePeriod.toFixed(1)}% esta acima da meta de 5%` });
       }
-      if (netGrowthMonth < 0) {
-        insights.push({ type: 'danger', msg: `Saldo negativo: ${Math.abs(netGrowthMonth)} clientes a menos este mes` });
-      } else if (netGrowthMonth > 0) {
-        insights.push({ type: 'success', msg: `Crescimento líquido: +${netGrowthMonth} clientes este mes` });
+      if (netGrowthPeriod < 0) {
+        insights.push({ type: 'danger', msg: `Saldo negativo: ${Math.abs(netGrowthPeriod)} clientes a menos no período` });
+      } else if (netGrowthPeriod > 0) {
+        insights.push({ type: 'success', msg: `Crescimento líquido: +${netGrowthPeriod} clientes no período` });
       }
       const suspendedPct = totalCustomers > 0 ? (suspendedCustomers / totalCustomers * 100) : 0;
       if (suspendedPct > 10) {
@@ -964,21 +984,30 @@ class AnalyticsEngine {
         suspendedCustomers,
         cancelledCustomers,
         activationsToday,
-        activationsMonth,
-        activationsLastMonth,
-        cancellationsMonth,
-        cancellationsLastMonth,
-        netGrowthMonth,
-        netGrowthLastMonth,
+        activationsPeriod,
+        activationsLastPeriod,
+        cancellationsPeriod,
+        cancellationsLastPeriod,
+        netGrowthPeriod,
+        netGrowthLastPeriod,
+        // Aliases legacy (frontend ainda usa nomes "Month")
+        activationsMonth: activationsPeriod,
+        activationsLastMonth: activationsLastPeriod,
+        cancellationsMonth: cancellationsPeriod,
+        cancellationsLastMonth: cancellationsLastPeriod,
+        netGrowthMonth: netGrowthPeriod,
+        netGrowthLastMonth: netGrowthLastPeriod,
         mrr: parseFloat(mrr.toFixed(2)),
         arpu: parseFloat(arpu.toFixed(2)),
-        churnRateMonth: parseFloat(churnRateMonth.toFixed(2)),
+        churnRatePeriod: parseFloat(churnRatePeriod.toFixed(2)),
+        churnRateMonth: parseFloat(churnRatePeriod.toFixed(2)),
         invoiceStats,
         topCities,
         topPlans,
         recentActivations,
         recentCancellations,
         insights,
+        period,
         generatedAt: new Date().toISOString()
       };
     } catch (error) {

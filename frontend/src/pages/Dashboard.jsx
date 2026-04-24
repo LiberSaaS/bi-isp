@@ -187,7 +187,7 @@ export const Dashboard = () => {
       setLoading(true)
       setError('')
       try {
-        const response = await apiService.getMetrics(selectedProvider)
+        const response = await apiService.getMetrics(selectedProvider, parseInt(period))
         setMetrics(response.data)
         setLastSync(response.data.lastSync)
       } catch (err) {
@@ -205,7 +205,7 @@ export const Dashboard = () => {
     try {
       await apiService.triggerSync(selectedProvider)
       setLastSync(new Date().toISOString())
-      const response = await apiService.getMetrics(selectedProvider)
+      const response = await apiService.getMetrics(selectedProvider, parseInt(period))
       setMetrics(response.data)
     } catch (err) {
       setError('Erro ao sincronizar dados')
