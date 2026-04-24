@@ -12,7 +12,7 @@ function toObjectId(id) {
 }
 
 /**
- * Analytics Engine for ISP BI
+ * Analytics Engine for NyxaInsight
  * Calculates KPIs from MongoDB data using aggregation pipelines
  */
 class AnalyticsEngine {
@@ -1021,11 +1021,11 @@ class AnalyticsEngine {
         recentOrders
       ] = await Promise.all([
         // Totals
-        ServiceOrder.countDocuments({ providerId: oid }),
-        ServiceOrder.countDocuments({ providerId: oid, status: 'open' }),
-        ServiceOrder.countDocuments({ providerId: oid, status: 'in_progress' }),
-        ServiceOrder.countDocuments({ providerId: oid, status: 'completed' }),
-        ServiceOrder.countDocuments({ providerId: oid, status: 'cancelled' }),
+        ServiceOrder.countDocuments({ providerId: oid, openedAt: { $gte: startDate } }),
+        ServiceOrder.countDocuments({ providerId: oid, status: 'open', openedAt: { $gte: startDate } }),
+        ServiceOrder.countDocuments({ providerId: oid, status: 'in_progress', openedAt: { $gte: startDate } }),
+        ServiceOrder.countDocuments({ providerId: oid, status: 'completed', openedAt: { $gte: startDate } }),
+        ServiceOrder.countDocuments({ providerId: oid, status: 'cancelled', openedAt: { $gte: startDate } }),
 
         // This month
         ServiceOrder.countDocuments({
@@ -1040,7 +1040,7 @@ class AnalyticsEngine {
 
         // Distribution by category/description (used as subject/assunto)
         ServiceOrder.aggregate([
-          { $match: { providerId: oid } },
+          { $match: { providerId: oid, openedAt: { $gte: startDate } } },
           {
             $group: {
               _id: { $ifNull: ['$description', '$category'] },
@@ -1066,7 +1066,7 @@ class AnalyticsEngine {
 
         // Distribution by status
         ServiceOrder.aggregate([
-          { $match: { providerId: oid } },
+          { $match: { providerId: oid, openedAt: { $gte: startDate } } },
           { $group: { _id: '$status', count: { $sum: 1 } } },
           { $sort: { count: -1 } },
           { $project: { _id: 0, status: '$_id', count: 1 } }
@@ -1074,7 +1074,7 @@ class AnalyticsEngine {
 
         // Distribution by priority
         ServiceOrder.aggregate([
-          { $match: { providerId: oid } },
+          { $match: { providerId: oid, openedAt: { $gte: startDate } } },
           { $group: { _id: '$priority', count: { $sum: 1 } } },
           { $sort: { count: -1 } },
           { $project: { _id: 0, priority: '$_id', count: 1 } }
@@ -1106,12 +1106,13 @@ class AnalyticsEngine {
           }
         ]),
 
-        // Average resolution time (completed orders)
+        // Average resolution time (completed orders no período)
         ServiceOrder.aggregate([
           {
             $match: {
               providerId: oid,
               status: 'completed',
+              closedAt: { $gte: startDate },
               resolutionTimeMinutes: { $ne: null, $gt: 0 }
             }
           },
@@ -1125,12 +1126,13 @@ class AnalyticsEngine {
           }
         ]),
 
-        // Top customers with most open O.S. (alert list)
+        // Top customers with most open O.S. (alert list, no período)
         ServiceOrder.aggregate([
           {
             $match: {
               providerId: oid,
-              status: { $in: ['open', 'in_progress'] }
+              status: { $in: ['open', 'in_progress'] },
+              openedAt: { $gte: startDate }
             }
           },
           {
@@ -1172,9 +1174,9 @@ class AnalyticsEngine {
           }
         ]),
 
-        // Recent service orders (last 50)
+        // Recent service orders (last 50 no período)
         ServiceOrder.aggregate([
-          { $match: { providerId: oid } },
+          { $match: { providerId: oid, openedAt: { $gte: startDate } } },
           { $sort: { openedAt: -1 } },
           { $limit: 50 },
           {
