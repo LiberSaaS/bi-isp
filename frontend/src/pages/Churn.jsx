@@ -144,6 +144,7 @@ const InsightBox = ({ churnMetrics }) => {
 
 export const Churn = () => {
   const { user } = useAuth()
+  const [providers, setProviders] = useState([])
   const [providerId, setProviderId] = useState(null)
   const [churnMetrics, setChurnMetrics] = useState(null)
   const [period, setPeriod] = useState('30')
@@ -154,6 +155,7 @@ export const Churn = () => {
   useEffect(() => {
     apiService.getProviders().then(res => {
       const list = res.data.providers || []
+      setProviders(list)
       if (list.length > 0) setProviderId(list[0]._id)
     }).catch(err => setError('Erro ao carregar provedores'))
   }, [])
@@ -219,6 +221,23 @@ export const Churn = () => {
           </h1>
         </div>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {providers.length >= 1 && (
+            <select
+              value={providerId || ''}
+              onChange={(e) => setProviderId(e.target.value)}
+              style={{
+                backgroundColor: T.card,
+                color: T.textPrimary,
+                border: `1px solid ${T.cardBorder}`,
+                borderRadius: '8px',
+                padding: '8px 12px',
+                fontSize: '14px',
+                cursor: 'pointer',
+              }}
+            >
+              {providers.map(p => <option key={p._id || p.id} value={p._id || p.id}>{p.name}</option>)}
+            </select>
+          )}
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}

@@ -987,6 +987,252 @@ class AnalyticsEngine {
     }
   }
 
+  /* ═══════════════════════════════════════════════════════════════
+   * SERVICE ORDER ANALYTICS
+   * ═══════════════════════════════════════════════════════════════ */
+
+  /**
+   * Get comprehensive service order metrics for a provider
+   * @param {string} providerId - MongoDB ObjectId of the provider
+   * @param {number} period - Number of days to analyze (default 90)
+   * @returns {Promise<Object>} Service order metrics
+   */
+  async getServiceOrderMetrics(providerId, period = 90) {
+    try {
+      const oid = toObjectId(providerId);
+      const now = new Date();
+      const startDate = new Date(now.getTime() - period * 24 * 60 * 60 * 1000);
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const [
+        totalOrders,
+        openOrders,
+        inProgressOrders,
+        completedOrders,
+        cancelledOrders,
+        openedThisMonth,
+        closedThisMonth,
+        byCategory,
+        byStatus,
+        byPriority,
+        byMonth,
+        avgResolutionTime,
+        topCustomers,
+        recentOrders
+      ] = await Promise.all([
+        // Totals
+        ServiceOrder.countDocuments({ providerId: oid }),
+        ServiceOrder.countDocuments({ providerId: oid, status: 'open' }),
+        ServiceOrder.countDocuments({ providerId: oid, status: 'in_progress' }),
+        ServiceOrder.countDocuments({ providerId: oid, status: 'completed' }),
+        ServiceOrder.countDocuments({ providerId: oid, status: 'cancelled' }),
+
+        // This month
+        ServiceOrder.countDocuments({
+          providerId: oid,
+          openedAt: { $gte: monthStart, $lte: now }
+        }),
+        ServiceOrder.countDocuments({
+          providerId: oid,
+          closedAt: { $gte: monthStart, $lte: now },
+          status: 'completed'
+        }),
+
+        // Distribution by category/description (used as subject/assunto)
+        ServiceOrder.aggregate([
+          { $match: { providerId: oid } },
+          {
+            $group: {
+              _id: { $ifNull: ['$description', '$category'] },
+              total: { $sum: 1 },
+              open: { $sum: { $cond: [{ $in: ['$status', ['open', 'in_progress']] }, 1, 0] } },
+              completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+              cancelled: { $sum: { $cond: [{ $eq: ['$status', 'cancelled'] }, 1, 0] } }
+            }
+          },
+          { $sort: { total: -1 } },
+          { $limit: 30 },
+          {
+            $project: {
+              _id: 0,
+              subject: { $ifNull: ['$_id', 'Sem Assunto'] },
+              total: 1,
+              open: 1,
+              completed: 1,
+              cancelled: 1
+            }
+          }
+        ]),
+
+        // Distribution by status
+        ServiceOrder.aggregate([
+          { $match: { providerId: oid } },
+          { $group: { _id: '$status', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $project: { _id: 0, status: '$_id', count: 1 } }
+        ]),
+
+        // Distribution by priority
+        ServiceOrder.aggregate([
+          { $match: { providerId: oid } },
+          { $group: { _id: '$priority', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $project: { _id: 0, priority: '$_id', count: 1 } }
+        ]),
+
+        // O.S. opened/closed by month
+        ServiceOrder.aggregate([
+          { $match: { providerId: oid, openedAt: { $gte: startDate } } },
+          {
+            $group: {
+              _id: {
+                year: { $year: '$openedAt' },
+                month: { $month: '$openedAt' }
+              },
+              opened: { $sum: 1 },
+              closed: {
+                $sum: { $cond: [{ $ne: ['$closedAt', null] }, 1, 0] }
+              }
+            }
+          },
+          { $sort: { '_id.year': 1, '_id.month': 1 } },
+          {
+            $project: {
+              _id: 0,
+              date: { $dateFromParts: { year: '$_id.year', month: '$_id.month', day: 1 } },
+              opened: 1,
+              closed: 1
+            }
+          }
+        ]),
+
+        // Average resolution time (completed orders)
+        ServiceOrder.aggregate([
+          {
+            $match: {
+              providerId: oid,
+              status: 'completed',
+              resolutionTimeMinutes: { $ne: null, $gt: 0 }
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              avgMinutes: { $avg: '$resolutionTimeMinutes' },
+              minMinutes: { $min: '$resolutionTimeMinutes' },
+              maxMinutes: { $max: '$resolutionTimeMinutes' }
+            }
+          }
+        ]),
+
+        // Top customers with most open O.S. (alert list)
+        ServiceOrder.aggregate([
+          {
+            $match: {
+              providerId: oid,
+              status: { $in: ['open', 'in_progress'] }
+            }
+          },
+          {
+            $group: {
+              _id: '$customerId',
+              openCount: { $sum: 1 },
+              orders: {
+                $push: {
+                  description: '$description',
+                  category: '$category',
+                  priority: '$priority',
+                  status: '$status',
+                  openedAt: '$openedAt'
+                }
+              }
+            }
+          },
+          { $sort: { openCount: -1 } },
+          { $limit: 20 },
+          {
+            $lookup: {
+              from: 'customers',
+              localField: '_id',
+              foreignField: '_id',
+              as: 'customer'
+            }
+          },
+          { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
+          {
+            $project: {
+              _id: 0,
+              customerId: '$_id',
+              customerName: { $ifNull: ['$customer.name', 'Cliente Desconhecido'] },
+              customerDocument: '$customer.document',
+              customerPlan: '$customer.plan.name',
+              openCount: 1,
+              orders: 1
+            }
+          }
+        ]),
+
+        // Recent service orders (last 50)
+        ServiceOrder.aggregate([
+          { $match: { providerId: oid } },
+          { $sort: { openedAt: -1 } },
+          { $limit: 50 },
+          {
+            $lookup: {
+              from: 'customers',
+              localField: 'customerId',
+              foreignField: '_id',
+              as: 'customer'
+            }
+          },
+          { $unwind: { path: '$customer', preserveNullAndEmptyArrays: true } },
+          {
+            $project: {
+              _id: 0,
+              externalId: 1,
+              description: 1,
+              category: 1,
+              type: 1,
+              priority: 1,
+              status: 1,
+              openedAt: 1,
+              closedAt: 1,
+              resolutionTimeMinutes: 1,
+              customerName: { $ifNull: ['$customer.name', 'N/A'] },
+              customerDocument: '$customer.document'
+            }
+          }
+        ])
+      ]);
+
+      const resTime = avgResolutionTime.length > 0 ? avgResolutionTime[0] : {};
+
+      return {
+        totalOrders,
+        openOrders,
+        inProgressOrders,
+        completedOrders,
+        cancelledOrders,
+        openedThisMonth,
+        closedThisMonth,
+        byCategory,
+        byStatus,
+        byPriority,
+        byMonth,
+        avgResolutionMinutes: resTime.avgMinutes ? Math.round(resTime.avgMinutes) : 0,
+        minResolutionMinutes: resTime.minMinutes || 0,
+        maxResolutionMinutes: resTime.maxMinutes || 0,
+        topCustomers,
+        recentOrders,
+        period,
+        generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.error('Error calculating service order metrics', { providerId, error: error.message });
+      throw error;
+    }
+  }
+
   /**
    * Get health metrics for a provider
    * @param {string} providerId - MongoDB ObjectId of the provider

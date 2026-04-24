@@ -40,8 +40,8 @@ export const Login = () => {
       <div className="w-full max-w-md">
         {/* Logo/Branding */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">ISP Analytics BI</h1>
-          <p className="text-slate-400 text-sm">Libernet</p>
+          <h1 className="text-3xl font-bold text-white mb-2">NyxaInsight</h1>
+          <p className="text-slate-400 text-sm">NYXACORE</p>
         </div>
 
         {/* Login Card */}
@@ -107,7 +107,7 @@ export const Login = () => {
 
           {/* Footer */}
           <p className="text-center text-xs text-slate-500 mt-6">
-            © {new Date().getFullYear()} Libernet. Todos os direitos reservados.
+            © {new Date().getFullYear()} NYXACORE. Todos os direitos reservados.
           </p>
         </div>
       </div>

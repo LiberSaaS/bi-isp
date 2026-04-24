@@ -195,7 +195,7 @@ async function start() {
 
     // Start the scheduler
     try {
-      startScheduler();
+      await startScheduler();
       logger.info('Scheduler started successfully');
     } catch (error) {
       logger.error('Failed to start scheduler', { error: error.message });

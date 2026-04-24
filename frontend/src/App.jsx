@@ -11,6 +11,8 @@ import Geografico from './pages/Geografico'
 import Churn from './pages/Churn'
 import Planos from './pages/Planos'
 import Alertas from './pages/Alertas'
+import OrdensServico from './pages/OrdensServico'
+import Configuracoes from './pages/Configuracoes'
 
 /**
  * Protected route wrapper component
@@ -57,6 +59,8 @@ function App() {
         <Route path="/churn" element={<P><Churn /></P>} />
         <Route path="/planos" element={<P><Planos /></P>} />
         <Route path="/alertas" element={<P><Alertas /></P>} />
+        <Route path="/ordens-servico" element={<P><OrdensServico /></P>} />
+        <Route path="/configuracoes" element={<P><Configuracoes /></P>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

@@ -287,7 +287,7 @@ export const Dashboard = () => {
 
         {/* Right controls */}
         <div className="flex items-center gap-2">
-          {providers.length > 1 && (
+          {providers.length >= 1 && (
             <div className="relative">
               <select
                 value={selectedProvider || ''}

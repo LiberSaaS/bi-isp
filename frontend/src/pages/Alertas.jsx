@@ -32,6 +32,7 @@ const T = {
 
 const Alertas = () => {
   const { user } = useAuth()
+  const [providers, setProviders] = useState([])
   const [providerId, setProviderId] = useState(null)
 
   const [overviewMetrics, setOverviewMetrics] = useState(null)
@@ -45,6 +46,7 @@ const Alertas = () => {
   useEffect(() => {
     apiService.getProviders().then(res => {
       const list = res.data.providers || []
+      setProviders(list)
       if (list.length > 0) setProviderId(list[0]._id)
     }).catch(err => setError('Erro ao carregar provedores'))
   }, [])
@@ -327,9 +329,28 @@ const Alertas = () => {
             Alertas — Central de Monitoramento
           </h1>
         </div>
-        <p style={{ color: T.textSecondary, margin: '0.5rem 0 0 0', fontSize: '0.875rem' }}>
-          Monitoramento de saúde de métricas comerciais em tempo real
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
+          <p style={{ color: T.textSecondary, margin: 0, fontSize: '0.875rem' }}>
+            Monitoramento de saúde de métricas comerciais em tempo real
+          </p>
+          {providers.length >= 1 && (
+            <select
+              value={providerId || ''}
+              onChange={(e) => setProviderId(e.target.value)}
+              style={{
+                backgroundColor: T.card,
+                color: T.textPrimary,
+                border: `1px solid ${T.cardBorder}`,
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              {providers.map(p => <option key={p._id || p.id} value={p._id || p.id}>{p.name}</option>)}
+            </select>
+          )}
+        </div>
       </div>
 
       {/* Status Summary Bar */}

@@ -68,6 +68,10 @@ export const apiService = {
     return axiosInstance.get(`/metrics/${providerId}/plans`)
   },
 
+  getServiceOrderMetrics: (providerId, period) => {
+    return axiosInstance.get(`/metrics/${providerId}/service-orders`, { params: { period } })
+  },
+
   getLicenseStatus: () => {
     return axiosInstance.get('/license/status')
   },
@@ -76,8 +80,36 @@ export const apiService = {
     return axiosInstance.get('/providers')
   },
 
+  getProvider: (id) => {
+    return axiosInstance.get(`/providers/${id}`)
+  },
+
+  createProvider: (data) => {
+    return axiosInstance.post('/providers', data)
+  },
+
+  updateProvider: (id, data) => {
+    return axiosInstance.put(`/providers/${id}`, data)
+  },
+
+  deleteProvider: (id) => {
+    return axiosInstance.delete(`/providers/${id}`)
+  },
+
+  validateProvider: (id) => {
+    return axiosInstance.post(`/providers/${id}/validate`)
+  },
+
   triggerSync: (providerId) => {
     return axiosInstance.post(`/sync/${providerId}`)
+  },
+
+  getSyncSettings: () => {
+    return axiosInstance.get('/settings/sync')
+  },
+
+  updateSyncSettings: (data) => {
+    return axiosInstance.put('/settings/sync', data)
   },
 }
 

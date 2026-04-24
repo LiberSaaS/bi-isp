@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import {
   BarChart3, ShoppingCart, LogOut, Wifi, Menu, X, ChevronRight,
-  LayoutDashboard, MapPin, TrendingDown, Package, AlertTriangle
+  LayoutDashboard, MapPin, TrendingDown, Package, AlertTriangle, Wrench, Settings
 } from 'lucide-react'
 
 const T = {
@@ -25,7 +25,9 @@ const navItems = [
   { path: '/geografico', label: 'Geográfico', icon: MapPin },
   { path: '/churn', label: 'Churn', icon: TrendingDown },
   { path: '/planos', label: 'Planos', icon: Package },
+  { path: '/ordens-servico', label: 'O.S.', icon: Wrench },
   { path: '/alertas', label: 'Alertas', icon: AlertTriangle },
+  { path: '/configuracoes', label: 'Configurações', icon: Settings },
 ]
 
 export const Layout = ({ children }) => {
@@ -34,10 +36,10 @@ export const Layout = ({ children }) => {
   const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <div className="flex min-h-screen" style={{ background: T.bg }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: T.bg }}>
       {/* Sidebar */}
       <aside
-        className="flex flex-col transition-all duration-300 sticky top-0 h-screen z-30"
+        className="flex flex-col transition-all duration-300 h-screen flex-shrink-0 z-30"
         style={{
           width: collapsed ? 64 : 200,
           background: T.sidebar,
@@ -104,7 +106,7 @@ export const Layout = ({ children }) => {
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col h-screen overflow-y-auto">
         {children}
       </div>
     </div>

@@ -1,7 +1,7 @@
 {
-  "name": "isp-bi-connector",
+  "name": "nyxainsight-connector",
   "version": "1.0.0",
-  "description": "ISP Analytics BI - Backend API",
+  "description": "NyxaInsight - Backend API",
   "type": "module",
   "main": "src/index.js",
   "scripts": {

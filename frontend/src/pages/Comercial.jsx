@@ -253,7 +253,7 @@ export const Comercial = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {providers.length > 1 && (
+          {providers.length >= 1 && (
             <div className="relative">
               <select value={selectedProvider || ''} onChange={e => setSelectedProvider(e.target.value)}
                 className="appearance-none text-[11px] rounded-lg pl-3 pr-7 py-1.5 cursor-pointer focus:outline-none"

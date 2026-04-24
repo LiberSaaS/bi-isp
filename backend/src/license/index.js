@@ -9,7 +9,7 @@ class LicenseManager {
       cacheDuration: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
       gracePeriod: 72 * 60 * 60 * 1000   // 72 hours in milliseconds
     };
-    this.validationUrl = 'https://ispacs.libernet.com.br/api/license/validate';
+    this.validationUrl = 'https://insight.nyxacore.com.br/api/license/validate';
   }
 
   /**
