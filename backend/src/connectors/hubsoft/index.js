@@ -154,7 +154,7 @@ async function syncCustomers(provider, client) {
       client,
       '/api/v1/integracao/cliente/todos',
       'clientes',
-      { cancelado: 'sim' } // Include cancelled service customers
+      { cancelado: 'sim', relacoes: 'endereco_fiscal' } // Include cancelled + fetch full address
     );
 
     const operations = customers
