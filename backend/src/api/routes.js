@@ -173,6 +173,26 @@ router.get('/metrics/:providerId/geographic', verifyToken, async (req, res) => {
 });
 
 /**
+ * GET /api/customers/:providerId/search
+ * Search customers by address fields (city, neighborhood, street)
+ * Query params: city, neighborhood, street, status, limit
+ */
+router.get('/customers/:providerId/search', verifyToken, async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const provider = await Provider.findById(providerId);
+    if (!provider) return res.status(404).json({ error: 'Provider not found' });
+    if (req.user.role !== 'admin' && req.user.providerId !== providerId) return res.status(403).json({ error: 'Forbidden' });
+    const { city, neighborhood, street, status, limit } = req.query;
+    const result = await analyticsEngine.searchCustomersByAddress(providerId, { city, neighborhood, street, status, limit });
+    res.json({ providerId, providerName: provider.name, ...result });
+  } catch (error) {
+    logger.error('Error searching customers by address', { error: error.message });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+/**
  * GET /api/metrics/:providerId/churn
  */
 router.get('/metrics/:providerId/churn', verifyToken, async (req, res) => {

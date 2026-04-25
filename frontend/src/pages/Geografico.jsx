@@ -92,39 +92,59 @@ const CurrencyTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-const KPICard = ({ title, value, subtitle, color = T.accent }) => (
-  <div style={{
-    backgroundColor: T.card,
-    border: `1px solid ${T.cardBorder}`,
-    borderRadius: '0.5rem',
-    padding: '1.5rem',
-  }}>
-    <p style={{
-      color: T.textSecondary,
-      fontSize: '0.875rem',
-      margin: '0 0 0.5rem 0',
+const KPICard = ({ title, value, subtitle, color = T.accent }) => {
+  // Adapta fontSize baseado no comprimento do value (string longa = fonte menor)
+  const valueStr = String(value ?? '');
+  const len = valueStr.length;
+  const fontSize = len <= 8 ? '1.875rem' : len <= 14 ? '1.375rem' : len <= 22 ? '1.05rem' : '0.875rem';
+  return (
+    <div style={{
+      backgroundColor: T.card,
+      border: `1px solid ${T.cardBorder}`,
+      borderRadius: '0.5rem',
+      padding: '1.5rem',
+      minWidth: 0,
     }}>
-      {title}
-    </p>
-    <p style={{
-      color: color,
-      fontSize: '1.875rem',
-      fontWeight: '700',
-      margin: '0 0 0.5rem 0',
-    }}>
-      {value}
-    </p>
-    {subtitle && (
-      <p style={{
-        color: T.textMuted,
-        fontSize: '0.75rem',
-        margin: 0,
-      }}>
-        {subtitle}
+      <p
+        title={title}
+        style={{
+          color: T.textSecondary,
+          fontSize: '0.875rem',
+          margin: '0 0 0.5rem 0',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {title}
       </p>
-    )}
-  </div>
-);
+      <p
+        title={valueStr}
+        style={{
+          color: color,
+          fontSize,
+          fontWeight: '700',
+          margin: '0 0 0.5rem 0',
+          wordBreak: 'break-word',
+          overflowWrap: 'break-word',
+          lineHeight: 1.15,
+        }}
+      >
+        {value}
+      </p>
+      {subtitle && (
+        <p style={{
+          color: T.textMuted,
+          fontSize: '0.75rem',
+          margin: 0,
+          wordBreak: 'break-word',
+        }}>
+          {subtitle}
+        </p>
+      )}
+    </div>
+  );
+};
 
 const ChartCard = ({ children, title }) => (
   <div style={{
@@ -138,6 +158,185 @@ const ChartCard = ({ children, title }) => (
     {children}
   </div>
 );
+
+const STATUS_LABEL = {
+  active: { label: 'Ativo', color: '#10b981' },
+  suspended: { label: 'Suspenso', color: '#f97316' },
+  cancelled: { label: 'Cancelado', color: '#ef4444' },
+  pending: { label: 'Pendente', color: '#eab308' },
+};
+
+const AddressSearchSection = ({ providerId }) => {
+  const [city, setCity] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
+  const [street, setStreet] = useState('');
+  const [status, setStatus] = useState('');
+  const [results, setResults] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [searched, setSearched] = useState(false);
+
+  const handleSearch = async (e) => {
+    e?.preventDefault?.();
+    if (!providerId) return;
+    if (!city.trim() && !neighborhood.trim() && !street.trim() && !status.trim()) {
+      setError('Preencha ao menos um campo de filtro');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await apiService.searchCustomersByAddress(providerId, {
+        city: city.trim() || undefined,
+        neighborhood: neighborhood.trim() || undefined,
+        street: street.trim() || undefined,
+        status: status || undefined,
+        limit: 500,
+      });
+      setResults(r.data.customers || []);
+      setTotal(r.data.total || 0);
+      setSearched(true);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Erro na busca');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClear = () => {
+    setCity(''); setNeighborhood(''); setStreet(''); setStatus('');
+    setResults([]); setTotal(0); setError(null); setSearched(false);
+  };
+
+  const inputStyle = {
+    backgroundColor: T.bg,
+    color: T.textPrimary,
+    border: `1px solid ${T.cardBorder}`,
+    borderRadius: '0.375rem',
+    padding: '0.5rem 0.75rem',
+    fontSize: '0.875rem',
+    width: '100%',
+    minWidth: 0,
+  };
+
+  return (
+    <div style={{
+      backgroundColor: T.card,
+      border: `1px solid ${T.cardBorder}`,
+      borderRadius: '0.5rem',
+      padding: '1.5rem',
+      marginBottom: '2rem',
+    }}>
+      <SectionTitle>Buscar Clientes por Endereço</SectionTitle>
+      <form onSubmit={handleSearch} style={{ marginBottom: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: T.textMuted, marginBottom: '0.25rem' }}>Cidade</label>
+            <input type="text" value={city} onChange={(e) => setCity(e.target.value)} placeholder="ex: Coaraci" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: T.textMuted, marginBottom: '0.25rem' }}>Bairro</label>
+            <input type="text" value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} placeholder="ex: Centro" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: T.textMuted, marginBottom: '0.25rem' }}>Rua / Avenida</label>
+            <input type="text" value={street} onChange={(e) => setStreet(e.target.value)} placeholder="ex: Av Brasil" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: T.textMuted, marginBottom: '0.25rem' }}>Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
+              <option value="">Todos</option>
+              <option value="active">Ativo</option>
+              <option value="suspended">Suspenso</option>
+              <option value="cancelled">Cancelado</option>
+              <option value="pending">Pendente</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button type="submit" disabled={loading} style={{
+            backgroundColor: T.accent, color: '#fff', border: 'none',
+            borderRadius: '0.375rem', padding: '0.5rem 1.25rem',
+            fontSize: '0.875rem', fontWeight: 600,
+            cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.6 : 1,
+          }}>
+            {loading ? 'Buscando...' : 'Buscar'}
+          </button>
+          <button type="button" onClick={handleClear} style={{
+            backgroundColor: 'transparent', color: T.textMuted,
+            border: `1px solid ${T.cardBorder}`, borderRadius: '0.375rem',
+            padding: '0.5rem 1rem', fontSize: '0.875rem', cursor: 'pointer',
+          }}>
+            Limpar
+          </button>
+          {searched && !loading && (
+            <span style={{ fontSize: '0.875rem', color: T.textSecondary, marginLeft: '0.5rem' }}>
+              {total.toLocaleString('pt-BR')} cliente{total === 1 ? '' : 's'} encontrado{total === 1 ? '' : 's'}
+              {results.length < total && ` (mostrando ${results.length})`}
+            </span>
+          )}
+        </div>
+        {error && (
+          <div style={{ marginTop: '0.75rem', color: T.red, fontSize: '0.875rem' }}>{error}</div>
+        )}
+      </form>
+
+      {results.length > 0 && (
+        <div style={{ overflowX: 'auto', maxHeight: '500px', overflowY: 'auto', border: `1px solid ${T.cardBorder}`, borderRadius: '0.375rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <thead style={{ position: 'sticky', top: 0, backgroundColor: T.card, zIndex: 1 }}>
+              <tr style={{ borderBottom: `1px solid ${T.gridLine}` }}>
+                <th style={{ textAlign: 'left', padding: '0.6rem', color: T.textSecondary, fontWeight: 600 }}>Cliente</th>
+                <th style={{ textAlign: 'left', padding: '0.6rem', color: T.textSecondary, fontWeight: 600 }}>Endereço</th>
+                <th style={{ textAlign: 'left', padding: '0.6rem', color: T.textSecondary, fontWeight: 600 }}>Bairro</th>
+                <th style={{ textAlign: 'left', padding: '0.6rem', color: T.textSecondary, fontWeight: 600 }}>Cidade</th>
+                <th style={{ textAlign: 'left', padding: '0.6rem', color: T.textSecondary, fontWeight: 600 }}>Plano</th>
+                <th style={{ textAlign: 'center', padding: '0.6rem', color: T.textSecondary, fontWeight: 600 }}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((c, i) => {
+                const st = STATUS_LABEL[c.status] || { label: c.status, color: T.textMuted };
+                return (
+                  <tr key={c._id || i} style={{
+                    backgroundColor: i % 2 === 0 ? 'transparent' : 'rgba(124, 58, 237, 0.05)',
+                    borderBottom: `1px solid ${T.gridLine}`,
+                  }}>
+                    <td style={{ padding: '0.6rem', color: T.textPrimary, wordBreak: 'break-word' }}>{c.name || '—'}</td>
+                    <td style={{ padding: '0.6rem', color: T.textSecondary, wordBreak: 'break-word' }}>
+                      {[c.address?.street, c.address?.number].filter(Boolean).join(', ') || '—'}
+                    </td>
+                    <td style={{ padding: '0.6rem', color: T.textSecondary, wordBreak: 'break-word' }}>{c.address?.neighborhood || '—'}</td>
+                    <td style={{ padding: '0.6rem', color: T.textSecondary, wordBreak: 'break-word' }}>{c.address?.city || '—'}</td>
+                    <td style={{ padding: '0.6rem', color: T.textSecondary, wordBreak: 'break-word' }}>
+                      {c.plan?.name || '—'}
+                    </td>
+                    <td style={{ padding: '0.6rem', textAlign: 'center' }}>
+                      <span style={{
+                        backgroundColor: `${st.color}22`, color: st.color,
+                        padding: '0.15rem 0.5rem', borderRadius: '0.25rem',
+                        fontSize: '0.7rem', fontWeight: 600,
+                      }}>
+                        {st.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {searched && results.length === 0 && !loading && !error && (
+        <div style={{ padding: '2rem', textAlign: 'center', color: T.textMuted }}>
+          Nenhum cliente encontrado para os filtros informados.
+        </div>
+      )}
+    </div>
+  );
+};
 
 const TopNeighborhoodsTable = ({ data }) => {
   const sortedData = data.slice().sort((a, b) => b.total - a.total).slice(0, 20);
@@ -542,6 +741,9 @@ export const Geografico = () => {
           />
         )}
       </div>
+
+      {/* Address Search Section */}
+      <AddressSearchSection providerId={selectedProvider} />
 
       {/* Row 2 - Charts */}
       <div style={{

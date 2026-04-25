@@ -614,6 +614,50 @@ class AnalyticsEngine {
    * GEOGRAPHIC ANALYTICS
    * ═══════════════════════════════════════════════════════════════ */
 
+  /**
+   * Search customers by address fields (city, neighborhood, street)
+   * Case-insensitive partial match on each field.
+   */
+  async searchCustomersByAddress(providerId, filters = {}) {
+    try {
+      const oid = toObjectId(providerId);
+      const { city, neighborhood, street, status, limit = 200 } = filters;
+      const match = { providerId: oid };
+
+      if (city && city.trim()) {
+        match['address.city'] = { $regex: city.trim(), $options: 'i' };
+      }
+      if (neighborhood && neighborhood.trim()) {
+        match['address.neighborhood'] = { $regex: neighborhood.trim(), $options: 'i' };
+      }
+      if (street && street.trim()) {
+        match['address.street'] = { $regex: street.trim(), $options: 'i' };
+      }
+      if (status && status.trim()) {
+        match.status = status.trim();
+      }
+
+      const customers = await Customer.find(match)
+        .select('name document phone email status plan address activationDate cancellationDate')
+        .sort({ 'address.city': 1, 'address.neighborhood': 1, 'address.street': 1, name: 1 })
+        .limit(Math.min(parseInt(limit) || 200, 1000))
+        .lean();
+
+      const total = await Customer.countDocuments(match);
+
+      return {
+        customers,
+        total,
+        returned: customers.length,
+        filters,
+        generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      logger.error('Error searching customers by address', { providerId, error: error.message });
+      throw error;
+    }
+  }
+
   async getGeographicMetrics(providerId) {
     try {
       const oid = toObjectId(providerId);

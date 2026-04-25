@@ -59,6 +59,9 @@ export const apiService = {
   getGeographicMetrics: (providerId) => {
     return axiosInstance.get(`/metrics/${providerId}/geographic`)
   },
+  searchCustomersByAddress: (providerId, filters) => {
+    return axiosInstance.get(`/customers/${providerId}/search`, { params: filters })
+  },
 
   getChurnMetrics: (providerId, period) => {
     return axiosInstance.get(`/metrics/${providerId}/churn`, { params: { period } })
